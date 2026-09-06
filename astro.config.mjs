@@ -28,7 +28,7 @@ import { pluginCustomCopyButton } from "./src/plugins/expressive-code/custom-cop
 export default defineConfig({
 	// TODO: 部署到 Cloudflare Pages 后，改成你的实际域名，例如 "https://my-blog.pages.dev/"
 	// 影响 sitemap、RSS 和 SEO 链接的生成
-	site: "https://your-blog.pages.dev/",
+	site: "https://boke.2956415426.workers.dev/",
 	base: "/",
 	trailingSlash: "always",
 	integrations: [
