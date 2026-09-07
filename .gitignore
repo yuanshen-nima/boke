@@ -36,3 +36,4 @@ yarn.lock
 # daily digest
 digest/config.json
 digest/work/
+digest/__pycache__/
