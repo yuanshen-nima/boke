@@ -71,3 +71,13 @@ draft: false        # true 则不发布
 ## 致谢
 
 - [Fuwari](https://github.com/saicaca/fuwari) — saicaca 开源的博客主题（MIT License）
+
+## 每日对话日报（自动化）
+
+每天 23:30 自动提取当天 **ZCode** 与 **Codex（ChatGPT）** 的对话，经大模型归纳成《AI 对话日报》自动发布。
+
+- 手动运行：`python digest/run.py`（`--date YYYY-MM-DD` 补某天；`--no-llm` 不调 API 出简版；`--no-push` 只生成不发布）
+- API 配置：`digest/config.json`（OpenAI 兼容协议，base_url / model / api_key，已被 gitignore，密钥不进仓库）
+- 计划任务：双击 `digest/install-task.bat` 注册（默认 23:30，可传参数改时间如 `install-task.bat 22:00`）；删除：`schtasks /Delete /TN BlogDailyDigest /F`
+- 日志：`digest/work/run.log`；素材快照：`digest/work/material-日期.json`
+- 前提：到点时电脑开机且已登录 Windows；错过则当天不生成，事后可 `--date` 补发
