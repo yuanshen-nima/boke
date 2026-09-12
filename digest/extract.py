@@ -160,6 +160,7 @@ def extract_codex(date_str: str) -> list:
     sessions = []
     for f in sorted(day_dir.glob("rollout-*.jsonl")):
         cwd = ""
+        started_at = None
         turns, cur_turn = [], None
         with f.open(encoding="utf-8") as fh:
             for line in fh:
@@ -171,7 +172,16 @@ def extract_codex(date_str: str) -> list:
                 except json.JSONDecodeError:
                     continue
                 if obj.get("type") == "session_meta":
-                    cwd = (obj.get("payload") or {}).get("cwd", "") or cwd
+                    p = obj.get("payload") or {}
+                    cwd = p.get("cwd", "") or cwd
+                    ts = p.get("timestamp")
+                    if ts:
+                        try:
+                            started_at = datetime.fromisoformat(
+                                str(ts).replace("Z", "+00:00")
+                            ).astimezone()
+                        except ValueError:
+                            started_at = None
                     continue
                 if obj.get("type") != "response_item":
                     continue
@@ -199,13 +209,12 @@ def extract_codex(date_str: str) -> list:
             {"q": t["q"], "a": _dedupe(t["a"])} for t in _cap_turns(turns) if t["q"]
         ]
         if turns:
-            t = datetime.strptime(f.stem[8:23], "%Y-%m-%dT%H-%M-%S")
             sessions.append(
                 {
                     "source": "codex",
                     "title": turns[0]["q"][:40],
                     "project": Path(cwd).name if cwd else "",
-                    "time": t.strftime("%H:%M"),
+                    "time": started_at.strftime("%H:%M") if started_at else "--:--",
                     "turns": turns,
                 }
             )

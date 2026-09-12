@@ -11,6 +11,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -65,6 +66,38 @@ def git_run(*args: str) -> subprocess.CompletedProcess:
     )
 
 
+# push 时依次尝试：直连 + 常见本地代理端口（Clash/V2Ray 等）
+PUSH_PROXY_CANDIDATES = [
+    None,
+    "http://127.0.0.1:7897",
+    "http://127.0.0.1:7890",
+    "http://127.0.0.1:10809",
+    "socks5h://127.0.0.1:7897",
+]
+
+
+def push_with_fallback() -> bool:
+    last_err = ""
+    for attempt in (1, 2):
+        for proxy in PUSH_PROXY_CANDIDATES:
+            args = ["push"]
+            label = "直连"
+            if proxy:
+                args = ["-c", f"http.proxy={proxy}", "push"]
+                label = f"代理 {proxy}"
+            push = git_run(*args)
+            if push.returncode == 0:
+                log(f"git push 成功（{label}），Cloudflare 将自动构建发布")
+                return True
+            last_err = push.stderr.strip()[:200]
+        if attempt == 1:
+            log(f"git push 全部失败（{last_err}），30 秒后重试一轮")
+            time.sleep(30)
+    log(f"git push 最终失败：{last_err}")
+    log("文章已在本地提交；之后任何一次成功运行都会自动补推")
+    return False
+
+
 def publish(post_rel: str, date_str: str) -> bool:
     r = git_run("status", "--porcelain", post_rel)
     if not r.stdout.strip():
@@ -78,13 +111,7 @@ def publish(post_rel: str, date_str: str) -> bool:
     if commit.returncode != 0:
         log(f"git commit 失败：{commit.stderr.strip()[:200]}")
         return False
-    push = git_run("push")
-    if push.returncode != 0:
-        log(f"git push 失败：{push.stderr.strip()[:300]}")
-        log("文章已在本地提交，网络恢复后可手动 git push")
-        return False
-    log("git push 完成，Cloudflare 将自动构建发布")
-    return True
+    return push_with_fallback()
 
 
 def main() -> int:
@@ -97,6 +124,13 @@ def main() -> int:
     date_str = args.date
     WORK_DIR.mkdir(exist_ok=True)
     log(f"===== 每日对话归纳 {date_str} =====")
+
+    # 补推：之前某天 push 失败遗留的本地提交，借这次联网机会先推出去
+    ahead = git_run("rev-list", "@{u}..HEAD")
+    if ahead.returncode == 0 and ahead.stdout.strip():
+        n = len(ahead.stdout.splitlines())
+        log(f"检测到 {n} 个未推送的本地提交，先尝试补推")
+        push_with_fallback()
 
     material = extract.build_material(date_str)
     n_sessions = len(material["sessions"])

@@ -71,13 +71,18 @@ def _chat_once(cfg: dict, messages: list) -> str:
     return content.strip()
 
 
-def chat(cfg: dict, messages: list, retries: int = 1) -> str:
+def chat(cfg: dict, messages: list, retries: int = 2, backoff: int = 10) -> str:
     last_err = None
-    for _ in range(retries + 1):
+    for i in range(retries + 1):
         try:
             return _chat_once(cfg, messages)
-        except (urllib.error.URLError, TimeoutError, RuntimeError, KeyError) as err:
+        except Exception as err:
+            # 网络类异常种类繁多（URLError/超时/IncompleteRead 等），统一重试
             last_err = err
+            if i < retries:
+                import time
+
+                time.sleep(backoff * (i + 1))
     raise RuntimeError(f"LLM API 调用失败（已重试 {retries} 次）：{last_err}")
 
 
