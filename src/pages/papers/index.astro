@@ -1,0 +1,42 @@
+---
+import { getCollection } from "astro:content";
+import PapersBrowser from "../../components/papers/PapersBrowser.svelte";
+import MainGridLayout from "../../layouts/MainGridLayout.astro";
+
+const papers = (await getCollection("papers", ({ data }) => data.draft !== true))
+	.map((p) => ({
+		slug: p.id,
+		title: p.data.title,
+		description: p.data.description,
+		year: p.data.year,
+		venue: p.data.venue,
+		doi: p.data.doi,
+		arxiv: p.data.arxiv,
+		paperUrl: p.data.paperUrl,
+		githubUrl: p.data.githubUrl,
+		topics: p.data.topics,
+		tags: p.data.tags,
+		updated: p.data.updated,
+	}))
+	.sort(
+		(a, b) =>
+			(b.year ?? 0) - (a.year ?? 0) || (b.updated ?? "").localeCompare(a.updated ?? ""),
+	);
+---
+
+<MainGridLayout title="论文知识库" description="论文精读笔记：方法、公式、实验与个人研究启发">
+    <div class="card-base py-6 px-4 md:px-8 mb-4 onload-animation w-full">
+        <div class="flex items-center gap-2 mb-1">
+            <div class="transition w-full block font-bold text-3xl md:text-[2.25rem]/[2.75rem]
+                        text-black/90 dark:text-white/90
+                        md:before:w-1 before:h-5 before:rounded-md before:bg-[var(--primary)]
+                        before:absolute before:top-[0.75rem] before:left-[-1.125rem] relative">
+                论文知识库
+            </div>
+        </div>
+        <p class="text-sm text-black/40 dark:text-white/40 mb-5">
+            精读笔记由 AI 对话整理生成，公式与实验数字均标注核验状态，引用前请对照原文。
+        </p>
+        <PapersBrowser client:load papers={papers}></PapersBrowser>
+    </div>
+</MainGridLayout>

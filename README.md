@@ -94,6 +94,20 @@ draft: false        # true 则不发布
 
 - [Fuwari](https://github.com/saicaca/fuwari) — saicaca 开源的博客主题（MIT License）
 
+## 论文知识库（paper_sync）
+
+论文精读笔记系统：从 ChatGPT 官方数据导出或单篇结构化笔记导入，AI 归纳成标准条目（方法/公式/实验/局限/个人启发），私有草稿 → 人工审核 → 安全发布到 `/papers/`。完整文档见 `docs/paper-sync-*.md`。
+
+```bash
+python -m paper_sync import-note 笔记.json   # 导入（或 import-export 导入 ChatGPT 导出包）
+python -m paper_sync list --status draft     # 查看待审
+python -m paper_sync approve <id>            # 人工审核
+python -m paper_sync publish <id>            # 安全扫描后发布
+python -m paper_sync test                    # 离线测试
+```
+
+注意：系统**不能**实时读取 ChatGPT Projects（平台无此 API），数据来源为官方导出文件或手动保存的笔记。
+
 ## 每日对话日报（自动化）
 
 每天 23:30 自动提取当天 **ZCode** 与 **Codex（ChatGPT）** 的对话，经大模型归纳成《AI 对话日报》，**通过两道安全关卡后自动发布**，否则降级为草稿。

@@ -20,6 +20,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from security import scrub  # 确定性脱敏统一在 security.py 维护
+
 HOME = Path.home()
 ZCODE_DB = HOME / ".zcode" / "cli" / "db" / "db.sqlite"
 CODEX_SESSIONS = HOME / ".codex" / "sessions"
@@ -29,24 +31,8 @@ MAX_MSG_CHARS = 800  # 单条消息截断
 MAX_MSGS_PER_SESSION = 40  # 每会话最多保留的消息条数
 MAX_SESSION_CHARS = 16000  # 单会话素材字符上限
 
-# 密钥样式字符串，发送给大模型前先脱敏
-SECRET_PATTERNS = [
-    re.compile(r"sk-[A-Za-z0-9_-]{16,}"),
-    re.compile(r"gh[pousr]_[A-Za-z0-9]{30,}"),
-    re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
-    re.compile(
-        r"(?i)(api[_-]?key|secret|password|token)\s*[=:]\s*[\"']?[A-Za-z0-9._/-]{12,}"
-    ),
-]
-
-# Codex 会把系统上下文以 user 消息注入，以下特征用于排除
+# Codex 会话会把系统上下文以 user 消息注入，以下特征用于排除
 CODEX_INJECTED_PREFIXES = ("<", "The following is", "NOTE:", "You are ", "You're ")
-
-
-def scrub(text: str) -> str:
-    for pat in SECRET_PATTERNS:
-        text = pat.sub("[已脱敏]", text)
-    return text
 
 
 def truncate(text: str, limit: int = MAX_MSG_CHARS) -> str:

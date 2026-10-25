@@ -38,6 +38,15 @@ def _mask(sample: str) -> str:
     return sample[:6] + "***(" + str(len(sample)) + " 字符)"
 
 
+def scrub(text: str) -> str:
+    """把素材中疑似密钥的字符串替换为占位符（发送给第三方模型前的强制脱敏）。"""
+    for pat, _name, kind in SCAN_PATTERNS:
+        if kind != "secret":
+            continue
+        text = re.sub(pat, "[已脱敏]", text)
+    return text
+
+
 def load_security_config() -> dict:
     """读取 config.json 的 security 段，缺省全部放行。"""
     cfg_path = DIGEST_DIR / "config.json"
