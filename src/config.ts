@@ -76,10 +76,20 @@ export const licenseConfig: LicenseConfig = {
 	url: "https://creativecommons.org/licenses/by-nc-sa/4.0/",
 };
 
-// Giscus 评论配置：到 https://giscus.app/zh-CN 生成参数后填入，并打开 enable
+// 评论系统：provider 为 "waline" 时使用 Waline（支持图片上传，需自建后端），
+// 为 "giscus" 时使用 GitHub Discussions 评论
+export const commentConfig: {
+	provider: "waline" | "giscus";
+	walineServerURL: string; // Waline 服务端地址，例如 "https://waline.example.com"，留空则评论区不显示
+} = {
+	provider: "waline",
+	walineServerURL: "", // TODO: Waline 后端部署完成后填入
+};
+
+// Giscus 评论配置（备用评论源）：https://giscus.app/zh-CN 生成参数
 // 前置条件：GitHub 仓库为公开仓库，并在仓库 Settings -> General -> Features 中开启 Discussions
 export const giscusConfig = {
-	enable: true, // 配置完成后改为 true 即可在文章底部显示评论
+	enable: false, // 切回 giscus 时改为 true（provider 也需设为 "giscus"）
 	repo: "yuanshen-nima/boke", // 例如 "octocat/my-blog"
 	repoId: "R_kgDOUP6taA", // giscus.app 生成
 	category: "Announcements", // giscus.app 生成，一般选 Announcements 或 General

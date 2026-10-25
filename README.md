@@ -50,11 +50,22 @@ draft: false        # true 则不发布
 | 关于页面 | `src/content/spec/about.md` |
 | 中文界面文案 | `src/i18n/languages/zh_CN.ts` |
 
-## 评论（Giscus，已启用）
+## 评论系统（Waline，支持图片上传）
 
-评论基于 GitHub Discussions，参数已配置在 `src/config.ts` → `giscusConfig`。读者评论会自动建到仓库 Discussions 的 Announcements 分类下，管理（删除/隐藏/封禁）在 GitHub 仓库的 Discussions 页进行。
+评论用 [Waline](https://waline.js.org/)：支持匿名/昵称邮箱评论、粘贴与拖拽上传图片、表情包，自带垃圾评论管理后台。前端组件在 `src/components/comment/Waline.svelte`，配置在 `src/config.ts` → `commentConfig`（`walineServerURL` 填后端地址后评论区自动显示）。
 
-> 若换了仓库，重新到 [giscus.app/zh-CN](https://giscus.app/zh-CN) 生成四个参数替换，并确认新仓库已开启 Discussions、安装了 [giscus App](https://github.com/apps/giscus)。
+### 后端部署（一次性，约 15 分钟）
+
+1. 注册 [LeanCloud 国际版](https://console.leancloud.app/)（邮箱即可），创建应用（开发版免费），进入 设置 → 应用凭证，记下 **AppID / AppKey / 服务器地址**
+2. 登录 [Vercel](https://vercel.com/)（用 GitHub 账号），打开 Waline 官方一键部署模板 <https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwalinejs%2Fwaline%2Ftree%2Fmain%2Fexample>，环境变量填：
+   - `LEAN_ID` = AppID
+   - `LEAN_KEY` = AppKey
+   - `LEAN_SERVER` = 服务器地址
+3. Deploy 完成后得到 `xxx.vercel.app` 地址，填入 `src/config.ts` → `commentConfig.walineServerURL` 并推送
+4. 评论管理后台：`https://xxx.vercel.app/ui`（首次注册的账号即管理员）
+
+> 图片上传默认以 base64 存入数据库（免费额度够用）；后续可到 Waline 后台 → 设置 → 图片上传 配置七牛/Cloudinary 图床。
+> 想切回 GitHub Discussions 评论：`commentConfig.provider` 改为 `"giscus"` 并把 `giscusConfig.enable` 改为 `true`。
 
 ## 首页精选与热门榜
 

@@ -1,6 +1,7 @@
 ---
 import path from "node:path";
 import Giscus from "@components/comment/Giscus.svelte";
+import Waline from "@components/comment/Waline.svelte";
 import License from "@components/misc/License.astro";
 import Markdown from "@components/misc/Markdown.astro";
 import I18nKey from "@i18n/i18nKey";
@@ -9,7 +10,7 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 import { getSortedPosts } from "@utils/content-utils";
 import { getDir, getPostUrlBySlug } from "@utils/url-utils";
 import { Icon } from "astro-icon/components";
-import { giscusConfig, licenseConfig } from "src/config";import ImageWrapper from "../../components/misc/ImageWrapper.astro";
+import { commentConfig, giscusConfig, licenseConfig } from "src/config";import ImageWrapper from "../../components/misc/ImageWrapper.astro";
 import PostMetadata from "../../components/PostMeta.astro";
 import { profileConfig, siteConfig } from "../../config";
 import { formatDateToYYYYMMDD } from "../../utils/date-utils";
@@ -115,10 +116,21 @@ const jsonLd = {
 
             {licenseConfig.enable && <License title={entry.data.title} slug={entry.slug} pubDate={entry.data.published} class="mb-6 rounded-xl license-container onload-animation"></License>}
 
-            {giscusConfig.enable && giscusConfig.repoId && (
+            {
+                (commentConfig.provider === "waline" && commentConfig.walineServerURL) ||
+                (commentConfig.provider === "giscus" && giscusConfig.enable) ? (
                 <div class="border-t-[1px] border-dashed border-[var(--line-divider)] my-6"></div>
+            ) : null}
+            {commentConfig.provider === "waline" && commentConfig.walineServerURL && (
+                <section class="onload-animation">
+                    <h2 class="flex items-center gap-2 text-xl font-bold text-black/90 dark:text-white/90 mb-4">
+                        <Icon name="fa6-regular:comments" class="text-[1.25rem] text-[var(--primary)]" />
+                        {i18n(I18nKey.comments)}
+                    </h2>
+                    <Waline client:load serverURL={commentConfig.walineServerURL} />
+                </section>
             )}
-            {giscusConfig.enable && giscusConfig.repoId && (
+            {commentConfig.provider === "giscus" && giscusConfig.enable && (
                 <section class="onload-animation">
                     <h2 class="flex items-center gap-2 text-xl font-bold text-black/90 dark:text-white/90 mb-4">
                         <Icon name="fa6-regular:comments" class="text-[1.25rem] text-[var(--primary)]" />
