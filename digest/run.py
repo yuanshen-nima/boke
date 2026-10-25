@@ -23,6 +23,7 @@ WORK_DIR = DIGEST_DIR / "work"
 
 sys.path.insert(0, str(DIGEST_DIR))
 import extract  # noqa: E402
+import security  # noqa: E402
 import summarize  # noqa: E402
 
 
@@ -47,7 +48,7 @@ def fallback_body(material: dict) -> str:
     return "\n".join(lines)
 
 
-def build_markdown(date_str: str, body: str, n_sessions: int) -> str:
+def build_markdown(date_str: str, body: str, n_sessions: int, draft: bool = False) -> str:
     # 摘要行优先取"今日重点"第一条加粗结论，取不到再用默认句式
     m = re.search(r"^\s*[-*]\s*\*\*(.+?)\*\*", body, re.MULTILINE)
     if m:
@@ -61,7 +62,7 @@ def build_markdown(date_str: str, body: str, n_sessions: int) -> str:
         f"description: {desc}\n"
         "tags: [每日摘要, AI 对话]\n"
         "category: 对话摘要\n"
-        "draft: false\n"
+        f"draft: {'true' if draft else 'false'}\n"
         "---\n\n"
     )
     return frontmatter + body.strip() + "\n"
@@ -126,6 +127,7 @@ def main() -> int:
     ap.add_argument("--date", default=datetime.now().strftime("%Y-%m-%d"))
     ap.add_argument("--no-llm", action="store_true", help="不调 API，生成话题清单版")
     ap.add_argument("--no-push", action="store_true", help="只生成文章，不 git 发布")
+    ap.add_argument("--force", action="store_true", help="跳过安全拦截，强制发布（人工确认后使用）")
     args = ap.parse_args()
 
     date_str = args.date
@@ -159,6 +161,12 @@ def main() -> int:
         material_path.write_text(
             json.dumps(material, ensure_ascii=False, indent=1), encoding="utf-8"
         )
+    # 项目黑名单过滤（config.json security.blocked_projects）：整个项目的会话不进入素材
+    sec_cfg = security.load_security_config()
+    material["sessions"], dropped = security.filter_sessions(material["sessions"], sec_cfg)
+    n_sessions = len(material["sessions"])
+    for d in dropped:
+        log(f"安全过滤：已跳过 {d}")
     if n_sessions == 0:
         log("当天没有对话记录，跳过生成与发布")
         return 0
@@ -167,22 +175,51 @@ def main() -> int:
     if args.no_llm:
         body = fallback_body(material)
         log("使用 --no-llm 话题清单模式")
+        draft = True  # 清单模式含原始提问，默认只存草稿
     else:
         try:
             cfg = summarize.load_config()
             body = summarize.summarize(material, cfg)
             log(f"LLM 归纳完成（{cfg['model']}，正文 {len(body)} 字符）")
+            draft = False
         except Exception as err:
             log(f"归纳失败：{err}")
             log("素材已保留，可修复配置后重跑；当天未发布")
             return 1
 
+    # ===== 安全关卡 1：确定性扫描（密钥/路径/内网信息），LLM 提示词不能替代 =====
+    findings = security.scan(body, extra_keywords=sec_cfg.get("sensitive_keywords", []))
+    if findings and not args.force:
+        for f in findings:
+            log(f"安全拦截[{f['kind']}] {f['name']}：{f['sample']}")
+        draft = True
+        log("命中敏感内容，本文按草稿保存，不发布。人工确认安全后："
+            "改 frontmatter draft 或用 --force 重新生成")
+
+    # ===== 安全关卡 2：LLM 复审（私有研究内容等语义级风险） =====
+    if not draft and not args.no_llm:
+        try:
+            review = summarize.safety_review(body, cfg)
+            if not review["safe"] and not args.force:
+                for r in review["reasons"]:
+                    log(f"复审拦截：{r}")
+                draft = True
+                log("安全复审未通过，本文按草稿保存，不发布")
+            else:
+                log("安全复审通过")
+        except Exception as err:
+            log(f"安全复审异常：{err}，按不安全处理")
+            draft = True
+
     post_path = POSTS_DIR / f"daily-{date_str}.md"
     post_path.write_text(
-        build_markdown(date_str, body, n_sessions), encoding="utf-8"
+        build_markdown(date_str, body, n_sessions, draft=draft), encoding="utf-8"
     )
-    log(f"文章已写入 {post_path}")
+    log(f"文章已写入 {post_path}" + ("（草稿，未发布）" if draft else ""))
 
+    if draft and not args.no_push:
+        log("草稿模式：跳过 git 发布，仅本地保存")
+        return 0
     if args.no_push:
         log("--no-push：跳过 git 发布")
         return 0

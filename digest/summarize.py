@@ -11,6 +11,7 @@
 """
 
 import json
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -120,3 +121,31 @@ def summarize(material: dict, cfg: dict) -> str:
             {"role": "user", "content": prompt},
         ],
     )
+
+
+REVIEW_PROMPT = """你是一名严格的内容安全审核员。下面是一篇即将自动发布到公开博客的《AI 对话日报》。
+请逐句审查是否存在以下风险：
+1. API 密钥、token、密码、数据库连接串等凭据（包括被部分遮掩的）
+2. 本地文件绝对路径、内网 IP、内网地址
+3. 未公开的科研数据、实验指标、论文想法等私有研究内容（如果文章大篇幅披露具体实验数字、方法细节或项目代号，视为有风险）
+4. 他人隐私、真实姓名与账号信息
+
+只输出 JSON，格式：{"safe": true/false, "reasons": ["原因1", ...]}。没有风险则 reasons 为空数组。宁可错杀，不可放过。"""
+
+
+def safety_review(article: str, cfg: dict) -> dict:
+    """LLM 复审（第二道关）。返回 {"safe": bool, "reasons": [...]}，解析失败按不安全处理。"""
+    raw = chat(
+        cfg,
+        [
+            {"role": "system", "content": REVIEW_PROMPT},
+            {"role": "user", "content": article},
+        ],
+        retries=1,
+    )
+    try:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        data = json.loads(m.group(0))
+        return {"safe": bool(data.get("safe")), "reasons": list(data.get("reasons") or [])}
+    except (AttributeError, ValueError, TypeError):
+        return {"safe": False, "reasons": ["安全复审输出无法解析，按不安全处理"]}

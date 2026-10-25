@@ -96,7 +96,21 @@ draft: false        # true 则不发布
 
 ## 每日对话日报（自动化）
 
-每天 23:30 自动提取当天 **ZCode** 与 **Codex（ChatGPT）** 的对话，经大模型归纳成《AI 对话日报》自动发布。
+每天 23:30 自动提取当天 **ZCode** 与 **Codex（ChatGPT）** 的对话，经大模型归纳成《AI 对话日报》，**通过两道安全关卡后自动发布**，否则降级为草稿。
+
+### 发布安全策略
+
+1. **关卡一（确定性扫描）**：`digest/security.py` 用正则扫描成稿中的 API 密钥、数据库连接串、私钥、绝对路径、内网 IP、邮箱等，命中即降级草稿。提示词约束不能替代确定性扫描
+2. **关卡二（LLM 复审）**：另一个提示词以审核员身份复审语义级风险（未公开科研数据、项目代号等），未通过同样只存草稿
+3. **项目黑名单**：`digest/config.json` → `security.blocked_projects` 里列出的项目目录，其会话整体不进入素材（如 `["codex"]` 可排除全部科研项目对话）
+4. **敏感词**：`security.sensitive_keywords` 里出现即转草稿
+5. 人工确认安全后：把文章 frontmatter 的 `draft` 改为 `false` 推送，或用 `python digest/run.py --date X --force` 强制发布
+
+### 数据备份
+
+- **文章**：GitHub 仓库即备份（每次发布都有提交历史）
+- **评论**：`digest/backup.py` 每日把 Waline 全部评论数据（Neon 数据库）dump 到 `digest/work/backup/`，保留最近 30 份；手动执行：`python digest/backup.py`
+- 恢复：Neon 控制台可重置数据库，再用备份 JSON 导回
 
 - 手动运行：`python digest/run.py`（`--date YYYY-MM-DD` 补某天；`--no-llm` 不调 API 出简版；`--no-push` 只生成不发布）
 - API 配置：`digest/config.json`（OpenAI 兼容协议，base_url / model / api_key，已被 gitignore，密钥不进仓库）
