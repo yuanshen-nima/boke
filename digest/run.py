@@ -9,6 +9,7 @@
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -47,11 +48,17 @@ def fallback_body(material: dict) -> str:
 
 
 def build_markdown(date_str: str, body: str, n_sessions: int) -> str:
+    # 摘要行优先取"今日重点"第一条加粗结论，取不到再用默认句式
+    m = re.search(r"^\s*[-*]\s*\*\*(.+?)\*\*", body, re.MULTILINE)
+    if m:
+        desc = re.sub(r"[。！？.]+$", "", m.group(1))[:80]
+    else:
+        desc = f"{date_str} 与 AI 结对的一天，{n_sessions} 个会话的话题归纳。"
     frontmatter = (
         "---\n"
         f"title: AI 对话日报 · {date_str}\n"
         f"published: {date_str}\n"
-        f"description: {date_str} 与 AI 结对的一天，{n_sessions} 个会话的话题归纳。\n"
+        f"description: {desc}\n"
         "tags: [每日摘要, AI 对话]\n"
         "category: 对话摘要\n"
         "draft: false\n"
@@ -132,16 +139,30 @@ def main() -> int:
         log(f"检测到 {n} 个未推送的本地提交，先尝试补推")
         push_with_fallback()
 
+    material_path = WORK_DIR / f"material-{date_str}.json"
     material = extract.build_material(date_str)
-    n_sessions = len(material["sessions"])
+    # 源记录可能已被 Codex/ZCode 清理：留存的素材快照若更全，则优先用快照
+    saved = None
+    if material_path.exists():
+        try:
+            saved = json.loads(material_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            saved = None
+    fresh_n = len(material["sessions"])
+    saved_n = len(saved.get("sessions", [])) if isinstance(saved, dict) else 0
+    if saved_n > fresh_n:
+        log(f"源记录仅提取到 {fresh_n} 个会话，改用更全的留存快照（{saved_n} 个）")
+        material = saved
+        n_sessions = saved_n
+    else:
+        n_sessions = fresh_n
+        material_path.write_text(
+            json.dumps(material, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
     if n_sessions == 0:
         log("当天没有对话记录，跳过生成与发布")
         return 0
-    material_path = WORK_DIR / f"material-{date_str}.json"
-    material_path.write_text(
-        json.dumps(material, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
-    log(f"素材提取完成：{n_sessions} 个会话 -> {material_path.name}")
+    log(f"素材就绪：{n_sessions} 个会话 -> {material_path.name}")
 
     if args.no_llm:
         body = fallback_body(material)

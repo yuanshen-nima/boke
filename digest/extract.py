@@ -52,7 +52,9 @@ def scrub(text: str) -> str:
 def truncate(text: str, limit: int = MAX_MSG_CHARS) -> str:
     text = " ".join(text.split())
     if len(text) > limit:
-        return text[:limit] + "…(截断)"
+        # 保留开头（背景/问题）与结尾（结论通常在最后），丢弃中间过程
+        half = limit // 2
+        return text[:half] + " …(中间略)… " + text[-half:]
     return text
 
 
@@ -238,7 +240,11 @@ if __name__ == "__main__":
     WORK = Path(__file__).resolve().parent / "work"
     WORK.mkdir(exist_ok=True)
     out = WORK / f"material-{args.date}.json"
-    out.write_text(json.dumps(material, ensure_ascii=False, indent=1), encoding="utf-8")
     for s in material["sessions"]:
         print(f"[{s['source']:5}] {s['time']} {s['project']:20} {s['title'][:36]} ({len(s['turns'])} 问)")
+    if not material["sessions"] and out.exists() and out.stat().st_size > 100:
+        # 提取为空时不覆盖留存的素材快照（源文件可能已被 Codex/ZCode 清理）
+        print(f"本次提取 0 个会话；保留已有素材快照 {out}")
+        raise SystemExit(0)
+    out.write_text(json.dumps(material, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"共 {len(material['sessions'])} 个会话，已写入 {out}")
