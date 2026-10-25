@@ -83,7 +83,7 @@ export const commentConfig: {
 	walineServerURL: string; // Waline 服务端地址，例如 "https://waline.example.com"，留空则评论区不显示
 } = {
 	provider: "waline",
-	walineServerURL: "", // TODO: Waline 后端部署完成后填入
+	walineServerURL: "https://waline-indol-kappa.vercel.app",
 };
 
 // Giscus 评论配置（备用评论源）：https://giscus.app/zh-CN 生成参数
