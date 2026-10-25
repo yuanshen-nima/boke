@@ -1,0 +1,51 @@
+---
+import { getCollection } from "astro:content";
+import { Icon } from "astro-icon/components";
+import { getPostUrlBySlug } from "@utils/url-utils";
+import { fetchTopPages } from "../../utils/analytics";
+import WidgetLayout from "./WidgetLayout.astro";
+
+interface Props {
+	class?: string;
+	style?: string;
+}
+const className = Astro.props.class;
+const style = Astro.props.style;
+
+// 构建时取近 30 天访问最多的文章（路径匹配不到文章的页面，如首页，会被剔除）
+const topPages = await fetchTopPages();
+let hot: { url: string; title: string; views: number }[] = [];
+if (topPages.length > 0) {
+	const posts = await getCollection("posts", ({ data }) => data.draft !== true);
+	const byPath = new Map(posts.map((p) => [getPostUrlBySlug(p.slug), p]));
+	for (const { path, views } of topPages) {
+		const post = byPath.get(path);
+		if (post) {
+			hot.push({ url: path, title: post.data.title, views });
+		}
+		if (hot.length >= 5) break;
+	}
+}
+---
+
+{hot.length > 0 && (
+	<WidgetLayout name="热门文章" id="hot-posts" class={className} style={style}>
+		<div class="flex flex-col gap-1">
+			{hot.map((h, i) => (
+				<a href={h.url}
+					class="flex items-baseline gap-2 py-1.5 px-2 -mx-2 rounded-lg transition
+					       hover:bg-black/[0.03] dark:hover:bg-white/[0.03]">
+					<Icon name="material-symbols:local-fire-department-rounded"
+						class="text-[1rem] text-[var(--primary)] shrink-0 translate-y-[2px]" />
+					<span class="font-medium text-sm text-black/75 dark:text-white/75 line-clamp-1 flex-1">
+						{h.title}
+					</span>
+					<span class="text-xs text-black/35 dark:text-white/35 whitespace-nowrap"
+						data-pagefind-ignore>
+						{h.views} 次
+					</span>
+				</a>
+			))}
+		</div>
+	</WidgetLayout>
+)}

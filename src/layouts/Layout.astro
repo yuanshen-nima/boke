@@ -447,6 +447,28 @@ const setup = () => {
             }
         }, 200)
 	});
+
+	// 不蒜子阅读量：仅在文章页加载脚本，swup 切页后按当前 URL 重新统计
+	const loadBusuanzi = () => {
+		const valueEl = document.getElementById('busuanzi_value_page_pv')
+		if (!valueEl) return
+		// 数值回填后再显示整行，脚本被墙/失败时保持隐藏
+		new MutationObserver(() => {
+			const v = document.getElementById('busuanzi_value_page_pv')
+			const row = document.getElementById('bsz-pv')
+			if (v && v.textContent && v.textContent !== '–' && row) {
+				row.style.display = 'flex'
+			}
+		}).observe(valueEl, { childList: true, characterData: true, subtree: true })
+		document.getElementById('busuanzi-script')?.remove()
+		const s = document.createElement('script')
+		s.id = 'busuanzi-script'
+		s.src = 'https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js'
+		s.async = true
+		document.head.appendChild(s)
+	}
+	window.swup.hooks.on('page:view', loadBusuanzi)
+	loadBusuanzi()
 }
 if (window?.swup?.hooks) {
 	setup()

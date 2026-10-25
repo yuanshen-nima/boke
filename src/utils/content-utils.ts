@@ -31,6 +31,12 @@ export async function getSortedPosts() {
 
 	return sorted;
 }
+
+/** 精选（置顶）文章，按发布时间倒序；首页顶部展示，不参与首页分页列表 */
+export async function getPinnedPosts() {
+	const sorted = await getRawSortedPosts();
+	return sorted.filter((post) => post.data.pinned === true);
+}
 export type PostForList = {
 	slug: string;
 	data: CollectionEntry<"posts">["data"];

@@ -50,13 +50,24 @@ draft: false        # true 则不发布
 | 关于页面 | `src/content/spec/about.md` |
 | 中文界面文案 | `src/i18n/languages/zh_CN.ts` |
 
-## 开启评论（Giscus，可选）
+## 评论（Giscus，已启用）
 
-1. 博客的 GitHub 仓库需要是**公开**仓库
-2. 仓库 Settings → General → Features 勾选 **Discussions**
-3. 安装 [giscus App](https://github.com/apps/giscus)
-4. 打开 [giscus.app/zh-CN](https://giscus.app/zh-CN)，填入仓库名，选择映射方式 `pathname`、分类 `Announcements`，页面会生成 `repo` / `repoId` / `category` / `categoryId` 四个参数
-5. 填入 `src/config.ts` → `giscusConfig`，并把 `enable` 改为 `true`
+评论基于 GitHub Discussions，参数已配置在 `src/config.ts` → `giscusConfig`。读者评论会自动建到仓库 Discussions 的 Announcements 分类下，管理（删除/隐藏/封禁）在 GitHub 仓库的 Discussions 页进行。
+
+> 若换了仓库，重新到 [giscus.app/zh-CN](https://giscus.app/zh-CN) 生成四个参数替换，并确认新仓库已开启 Discussions、安装了 [giscus App](https://github.com/apps/giscus)。
+
+## 首页精选与热门榜
+
+- **精选文章**：文章 frontmatter 加一行 `pinned: true`，该文会出现在首页顶部「精选文章」区，并从下方分页列表移除（不重复展示）；删除该行即取消精选
+- **文章阅读量**：文章页的阅读量由[不蒜子](https://busuanzi.ibruce.info/)统计，脚本加载失败时自动隐藏
+- **热门文章榜**（侧栏，可选）：构建时从 Cloudflare Web Analytics 取近 30 天访问最多的 5 篇文章。启用步骤：
+  1. Cloudflare 仪表板 → 该 Pages 项目 → Web Analytics 开启统计
+  2. 创建 API Token（权限 Account → Web Analytics → Read），记下 Account ID 和站点 siteTag（统计代码 URL 中的参数）
+  3. 在 Pages 项目 Settings → 环境变量（构建时）添加：
+     - `CF_WEBANALYTICS_ACCOUNT_ID`
+     - `CF_WEBANALYTICS_TOKEN`
+     - `CF_WEBANALYTICS_SITE_TAG`
+  4. 重新部署后侧栏出现「热门文章」；未配置时该模块自动隐藏，不影响构建
 
 ## 部署到 Cloudflare Pages
 

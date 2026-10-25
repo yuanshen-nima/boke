@@ -1,13 +1,17 @@
 ---
 import type { GetStaticPaths } from "astro";
 import Pagination from "../components/control/Pagination.astro";
+import PinnedPosts from "../components/PinnedPosts.astro";
 import PostPage from "../components/PostPage.astro";
 import { PAGE_SIZE } from "../constants/constants";
 import MainGridLayout from "../layouts/MainGridLayout.astro";
-import { getSortedPosts } from "../utils/content-utils";
+import { getPinnedPosts, getSortedPosts } from "../utils/content-utils";
 
 export const getStaticPaths = (async ({ paginate }) => {
-	const allBlogPosts = await getSortedPosts();
+	// 精选（pinned）文章在首页顶部的“精选文章”区展示，不进入分页列表，避免重复
+	const allBlogPosts = (await getSortedPosts()).filter(
+		(post) => !post.data.pinned,
+	);
 	return paginate(allBlogPosts, { pageSize: PAGE_SIZE });
 }) satisfies GetStaticPaths;
 // https://github.com/withastro/astro/issues/6507#issuecomment-1489916992
@@ -15,9 +19,13 @@ export const getStaticPaths = (async ({ paginate }) => {
 const { page } = Astro.props;
 
 const len = page.data.length;
+const pinnedPosts = page.currentPage === 1 ? await getPinnedPosts() : [];
 ---
 
 <MainGridLayout>
+    {pinnedPosts.length > 0 && (
+        <PinnedPosts posts={pinnedPosts} class="mb-4" style={`animation-delay: calc(var(--content-delay))`}></PinnedPosts>
+    )}
     <PostPage page={page}></PostPage>
     <Pagination class="mx-auto onload-animation" page={page} style={`animation-delay: calc(var(--content-delay) + ${(len)*50}ms)`}></Pagination>
 </MainGridLayout>

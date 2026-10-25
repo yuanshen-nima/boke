@@ -5,6 +5,7 @@ description: 从零到上线，记录这个博客的技术选型和搭建过程�
 tags: [博客, Astro, Cloudflare]
 category: 随笔
 draft: false
+pinned: true
 ---
 
 欢迎来到我的博客！这是第一篇文章，记录一下这个站点的技术选型和搭建过程。

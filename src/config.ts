@@ -79,11 +79,11 @@ export const licenseConfig: LicenseConfig = {
 // Giscus 评论配置：到 https://giscus.app/zh-CN 生成参数后填入，并打开 enable
 // 前置条件：GitHub 仓库为公开仓库，并在仓库 Settings -> General -> Features 中开启 Discussions
 export const giscusConfig = {
-	enable: false, // 配置完成后改为 true 即可在文章底部显示评论
-	repo: "yourname/your-repo", // 例如 "octocat/my-blog"
-	repoId: "", // giscus.app 生成
+	enable: true, // 配置完成后改为 true 即可在文章底部显示评论
+	repo: "yuanshen-nima/boke", // 例如 "octocat/my-blog"
+	repoId: "R_kgDOUP6taA", // giscus.app 生成
 	category: "Announcements", // giscus.app 生成，一般选 Announcements 或 General
-	categoryId: "", // giscus.app 生成
+	categoryId: "DIC_kwDOUP6taM4DJjlH", // giscus.app 生成
 	mapping: "pathname",
 };
 
