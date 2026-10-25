@@ -35,7 +35,7 @@
 		script.setAttribute("data-strict", "0");
 		script.setAttribute("data-reactions-enabled", "1");
 		script.setAttribute("data-emit-metadata", "0");
-		script.setAttribute("data-input-position", "top");
+		script.setAttribute("data-input-position", "bottom"); // 评论列表在前、输入框在底部，打开即见评论
 		script.setAttribute("data-theme", currentGiscusTheme());
 		script.setAttribute("data-lang", "zh-CN");
 		script.setAttribute("crossorigin", "anonymous");
