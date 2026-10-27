@@ -18,7 +18,7 @@ class SyncLock:
         if self.lock_file.exists():
             info = {}
             try:
-                info = json.loads(self.lock_file.read_text(encoding="utf-8"))
+                info = json.loads(self.lock_file.read_text(encoding="utf-8-sig"))
             except (OSError, json.JSONDecodeError):
                 pass
             mtime = self.lock_file.stat().st_mtime

@@ -44,8 +44,8 @@ def parse_source(path: Path) -> tuple[list[ParsedConversation], str]:
     """按扩展名/文件名分发到具体适配器。返回 (会话列表, source_type)。"""
     p = Path(path)
     name = p.name.lower()
-    if p.suffix.lower() == ".zip" or name.startswith("chatgpt") or "conversation" in name:
-        # ChatGPT 官方导出：zip 包，或 conversations.json（含分卷）
+    # ChatGPT 官方导出：zip 包，或 conversations.json（含 conversations-partN.json 分卷）
+    if p.suffix.lower() == ".zip" or name.startswith(("conversations", "chatgpt_export", "chatgpt-export")):
         return parse_chatgpt_export(p), "chatgpt_export"
     if p.suffix.lower() == ".json":
         return parse_json_source(p)
@@ -196,7 +196,7 @@ def parse_chatgpt_export(path: Path) -> list[ParsedConversation]:
         except zipfile.BadZipFile as e:
             raise SourceError(f"损坏的 zip 文件 {p.name}：{e}") from e
     else:
-        texts.append(p.read_text(encoding="utf-8", errors="replace"))
+        texts.append(p.read_text(encoding="utf-8-sig", errors="replace"))
 
     convs: list[ParsedConversation] = []
     errors: list[str] = []
@@ -259,7 +259,7 @@ def parse_web_messages(data: dict, path: Path) -> ParsedConversation:
 def parse_json_source(path: Path) -> tuple[list[ParsedConversation], str]:
     """智能解析 JSON 文件：优先区分 ChatGPT 网页端单会话、ChatGPT 官方导出与单篇结构化笔记。"""
     try:
-        content = path.read_text(encoding="utf-8")
+        content = path.read_text(encoding="utf-8-sig")
         data = json.loads(content)
     except json.JSONDecodeError as e:
         raise SourceError(f"JSON 无法解析 {path.name}：{e}") from e
@@ -338,7 +338,7 @@ def parse_note_json(path: Path) -> list[ParsedConversation]:
     整个 JSON 作为一条「会话」进入管线：字段序列化为文本，供归纳层提取。
     """
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as e:
         raise SourceError(f"笔记 JSON 无法解析 {path.name}：{e}") from e
     if not isinstance(data, dict):
@@ -348,7 +348,7 @@ def parse_note_json(path: Path) -> list[ParsedConversation]:
 
 def parse_note_md(path: Path) -> ParsedConversation:
     """Markdown 笔记：frontmatter 提取元信息，正文原样保留。"""
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     title = path.stem
     project_id = ""
     body = text

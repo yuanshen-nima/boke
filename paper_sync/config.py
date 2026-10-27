@@ -32,14 +32,18 @@ def ensure_dirs() -> None:
 
 
 def load_private_config() -> dict:
-    """私有配置（数据目录内，不进仓库）。"""
+    """私有配置（数据目录内，不进仓库）。
+
+    读取时使用 utf-8-sig：记事本 / Windows PowerShell 保存的 UTF-8 文件常带 BOM，
+    若按 utf-8 解析会静默失败并回退默认值（会让白名单、AI 开关无提示失效）。
+    """
     cfg_path = DATA_DIR / "config.json"
     defaults = {
         "project_ids": [],  # ChatGPT「论文阅读」项目的 project_id（导出数据含此字段时使用）
         "ai": {"enabled": True, "max_chars": 60000},  # 关闭后使用离线确定性提取
     }
     try:
-        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
         for k, v in cfg.items():
             defaults[k] = v
     except (OSError, json.JSONDecodeError):
@@ -49,7 +53,7 @@ def load_private_config() -> dict:
 
 def load_deepseek_config() -> dict:
     """复用每日日报的 DeepSeek 配置（base_url/api_key/model），不新建密钥存储。"""
-    cfg = json.loads(DIGEST_CONFIG.read_text(encoding="utf-8"))
+    cfg = json.loads(DIGEST_CONFIG.read_text(encoding="utf-8-sig"))
     for key in ("base_url", "api_key", "model"):
         if not cfg.get(key):
             raise RuntimeError(f"digest/config.json 缺少 {key}，无法调用 AI 归纳")
@@ -61,7 +65,7 @@ def load_conversation_allowlist() -> set[str]:
         return set()
     return {
         line.strip()
-        for line in CONV_LIST_FILE.read_text(encoding="utf-8").splitlines()
+        for line in CONV_LIST_FILE.read_text(encoding="utf-8-sig").splitlines()
         if line.strip() and not line.strip().startswith("#")
     }
 
@@ -70,7 +74,7 @@ def load_manual_map() -> dict:
     if not MANUAL_MAP_FILE.exists():
         return {}
     try:
-        return json.loads(MANUAL_MAP_FILE.read_text(encoding="utf-8"))
+        return json.loads(MANUAL_MAP_FILE.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError:
         return {}
 

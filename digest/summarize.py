@@ -44,7 +44,7 @@ def load_config() -> dict:
         raise RuntimeError(
             "缺少 digest/config.json：请复制 digest/config.example.json 为 digest/config.json 并填入 API 配置"
         )
-    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
     for key in ("base_url", "api_key", "model"):
         if not cfg.get(key) or str(cfg[key]).startswith("在这里"):
             raise RuntimeError(f"digest/config.json 的 {key} 尚未配置")

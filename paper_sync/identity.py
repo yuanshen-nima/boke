@@ -10,6 +10,8 @@ import unicodedata
 
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"'<>，。；]+", re.IGNORECASE)
 ARXIV_URL_RE = re.compile(r"\barxiv\.org/(?:abs|pdf)/([0-9]{4}\.[0-9]{4,5})(v\d+)?", re.IGNORECASE)
+# 明确带「arXiv」字样的裸编号，例如 "arXiv: 2304.06808"（必须出现 arXiv 关键词，避免误匹配）
+ARXIV_LABEL_RE = re.compile(r"\barxiv\s*(?:id)?\s*[:：]?\s*([0-9]{4}\.[0-9]{4,5})(v\d+)?\b", re.IGNORECASE)
 
 
 def normalize_doi(doi: str) -> str:
@@ -58,4 +60,8 @@ def find_identifiers(text: str) -> tuple[str, str]:
     m = ARXIV_URL_RE.search(text)
     if m:
         arxiv = normalize_arxiv(m.group(1))
+    else:
+        m = ARXIV_LABEL_RE.search(text)
+        if m:
+            arxiv = normalize_arxiv(m.group(1))
     return doi, arxiv

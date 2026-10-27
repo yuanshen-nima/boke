@@ -34,7 +34,7 @@ def load_meta(paper_dir: Path) -> dict | None:
     p = paper_dir / "meta.json"
     if not p.exists():
         return None
-    return json.loads(p.read_text(encoding="utf-8"))
+    return json.loads(p.read_text(encoding="utf-8-sig"))
 
 
 def save_meta(paper_dir: Path, meta: dict) -> None:

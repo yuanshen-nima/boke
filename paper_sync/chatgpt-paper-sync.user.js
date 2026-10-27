@@ -1,14 +1,13 @@
 // ==UserScript==
 // @name         ChatGPT 论文阅读会话一键同步到博客知识库 (PaperSync)
 // @namespace    https://github.com/yuanshen-nima/boke
-// @version      1.0.0
+// @version      1.1.0
 // @description  在 ChatGPT 页面上一键提取当前论文讨论会话，直接推送到本地 PaperSync 知识库生成私有草稿
 // @author       liang boyu
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
-// @grant        GM_notification
 // @connect      127.0.0.1
 // @connect      localhost
 // @run-at       document-idle
@@ -18,20 +17,20 @@
     'use strict';
 
     const LOCAL_SERVER = 'http://127.0.0.1:8765';
+    const LOG = (...a) => console.log('[PaperSync]', ...a);
     let isServerAlive = false;
 
-    // 注入悬浮按钮样式
     GM_addStyle(`
         #papersync-float-btn {
             position: fixed;
-            top: 14px;
-            right: 130px;
-            z-index: 99999;
+            top: 12px;
+            right: 150px;
+            z-index: 2147483000;
             display: flex;
             align-items: center;
             gap: 8px;
             padding: 7px 14px;
-            background: rgba(32, 33, 35, 0.85);
+            background: rgba(32, 33, 35, 0.9);
             backdrop-filter: blur(8px);
             color: #ececf1;
             border: 1px solid rgba(255, 255, 255, 0.15);
@@ -40,79 +39,59 @@
             font-weight: 500;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
             transition: all 0.2s ease;
+            user-select: none;
         }
         #papersync-float-btn:hover {
-            background: rgba(52, 53, 65, 0.95);
-            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(52, 53, 65, 0.98);
+            border-color: rgba(255, 255, 255, 0.32);
             transform: translateY(-1px);
         }
+        #papersync-float-btn.busy { opacity: 0.75; pointer-events: none; }
         #papersync-status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #8e8ea0;
-            transition: background 0.3s;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #8e8ea0; transition: background 0.3s;
         }
-        #papersync-status-dot.online {
-            background: #10a37f;
-            box-shadow: 0 0 6px #10a37f;
-        }
+        #papersync-status-dot.online { background: #10a37f; box-shadow: 0 0 6px #10a37f; }
         #papersync-toast {
-            position: fixed;
-            top: 60px;
-            right: 130px;
-            z-index: 100000;
-            padding: 10px 18px;
-            border-radius: 8px;
-            font-size: 13px;
-            color: #fff;
-            background: #202123;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-            opacity: 0;
-            transform: translateY(-8px);
-            transition: all 0.25s ease;
-            pointer-events: none;
-            max-width: 380px;
-            line-height: 1.5;
+            position: fixed; top: 58px; right: 150px; z-index: 2147483001;
+            padding: 11px 16px; border-radius: 10px; font-size: 13px; color: #fff;
+            background: #1f2023; border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+            opacity: 0; transform: translateY(-8px);
+            transition: all 0.25s ease; pointer-events: none;
+            max-width: 420px; line-height: 1.55; word-break: break-word;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
-        #papersync-toast.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        #papersync-toast.show { opacity: 1; transform: translateY(0); }
+        #papersync-toast code { background: rgba(255,255,255,.1); padding: 1px 4px; border-radius: 4px; font-size: 11px; }
     `);
 
-    // 创建提示框
     const toast = document.createElement('div');
     toast.id = 'papersync-toast';
     document.body.appendChild(toast);
 
-    function showToast(msg, isSuccess = true, duration = 3500) {
-        toast.innerHTML = msg;
-        toast.style.borderColor = isSuccess ? '#10a37f' : '#ef4444';
+    function showToast(html, ok = true, duration = 4000) {
+        toast.innerHTML = html;
+        toast.style.borderColor = ok ? '#10a37f' : '#ef4444';
         toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), duration);
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => toast.classList.remove('show'), duration);
     }
 
-    // 检查本地服务状态
+    // ---------------- 服务与工具 ----------------
     function checkServerHealth() {
         GM_xmlhttpRequest({
             method: 'GET',
             url: `${LOCAL_SERVER}/health`,
             timeout: 2000,
-            onload: function (resp) {
+            onload: r => {
+                isServerAlive = r.status === 200;
                 const dot = document.getElementById('papersync-status-dot');
-                if (resp.status === 200) {
-                    isServerAlive = true;
-                    if (dot) dot.classList.add('online');
-                } else {
-                    isServerAlive = false;
-                    if (dot) dot.classList.remove('online');
-                }
+                if (dot) dot.classList.toggle('online', isServerAlive);
             },
-            onerror: function () {
+            onerror: () => {
                 isServerAlive = false;
                 const dot = document.getElementById('papersync-status-dot');
                 if (dot) dot.classList.remove('online');
@@ -120,58 +99,187 @@
         });
     }
 
-    // 从 URL 提取 conversation_id
     function getConversationId() {
-        const m = window.location.pathname.match(/\/c\/([a-f0-9-]+)/i);
+        const m = window.location.pathname.match(/\/c\/([A-Za-z0-9_-]{8,})/);
         return m ? m[1] : null;
     }
 
-    // 从 DOM 提取对话备用
-    function extractFromDOM() {
-        const titleEl = document.querySelector('title');
-        let title = titleEl ? titleEl.innerText.replace(/\s*-\s*ChatGPT.*$/i, '').trim() : '论文讨论';
-        const messages = [];
-
-        // 查找消息节点
-        const turns = document.querySelectorAll('[data-message-author-role]');
-        turns.forEach(el => {
-            const role = el.getAttribute('data-message-author-role') || 'user';
-            const text = el.innerText.trim();
-            if (text) {
-                messages.push({ role, text });
-            }
-        });
-
-        return {
-            source: 'chatgpt_web',
-            conversation_id: getConversationId() || `web-${Date.now()}`,
-            title: title || 'ChatGPT 论文阅读会话',
-            project_id: 'paper_reading',
-            messages: messages
-        };
+    function pageTitle() {
+        const t = (document.title || '').replace(/\s*[-|]\s*ChatGPT.*$/i, '').trim();
+        return t || 'ChatGPT 论文阅读会话';
     }
 
-    // 尝试直接调用官方内部接口获取完整干净的 JSON 树
-    async function fetchNativeConversation(convId) {
+    const ROLE_LABEL = /^(You said:|ChatGPT said:|你说：|你说:|ChatGPT 说：|ChatGPT 说:)\s*/i;
+
+    function cleanText(raw) {
+        if (!raw) return '';
+        let t = raw.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' ');
+        t = t.replace(ROLE_LABEL, '');
+        // 逐行 trim，并把连续空行折叠成一个
+        const out = [];
+        for (const line of t.split('\n')) {
+            const s = line.trim();
+            if (s === '' && (out.length === 0 || out[out.length - 1] === '')) continue;
+            out.push(s);
+        }
+        return out.join('\n').trim();
+    }
+
+    // ---------------- 提取途径 1：站内原生接口 ----------------
+    async function getAccessToken() {
         try {
-            const resp = await fetch(`/backend-api/conversation/${convId}`, {
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                if (data && data.mapping) {
-                    return data;
-                }
+            const r = await fetch('/api/auth/session', { credentials: 'include' });
+            if (r.ok) {
+                const j = await r.json();
+                return j.accessToken || null;
             }
         } catch (e) {
-            console.warn('[PaperSync] 原生 API 获取失败，降级为 DOM 提取', e);
+            LOG('获取 accessToken 失败', e);
         }
         return null;
     }
 
-    // 下载备用 JSON
-    function fallbackDownload(data) {
+    async function apiFetchConversation(convId) {
+        const token = await getAccessToken();
+        const endpoints = [
+            `/backend-api/conversation/${convId}`,
+            `/backend-api/conversations/${convId}`,
+        ];
+        for (const url of endpoints) {
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                LOG('尝试接口', url, token ? '(带 token)' : '(仅 Cookie)');
+                const ctrl = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), 8000);
+                const resp = await fetch(url, {
+                    credentials: 'include',
+                    headers,
+                    signal: ctrl.signal
+                });
+                clearTimeout(timer);
+                LOG('接口响应', url, resp.status);
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                if (data && data.mapping && Object.keys(data.mapping).length) {
+                    LOG('接口提取成功，节点数', Object.keys(data.mapping).length);
+                    return data;
+                }
+            } catch (e) {
+                LOG('接口异常', url, e);
+            }
+        }
+        return null;
+    }
+
+    // ---------------- 提取途径 2：DOM 多级选择器 ----------------
+    function pickTurnNodes() {
+        // 策略 1：新版 chatgpt.com 的 article 轮次
+        let nodes = Array.from(document.querySelectorAll('article[data-testid^="conversation-turn-"]'));
+        if (nodes.length) return { nodes, mode: 'article' };
+
+        // 策略 2：角色属性节点
+        nodes = Array.from(document.querySelectorAll('[data-message-author-role]'));
+        if (nodes.length) return { nodes, mode: 'role-attr' };
+
+        // 策略 3：通用 article / 消息滚动容器内的直接子块
+        nodes = Array.from(document.querySelectorAll('main article'));
+        if (nodes.length) return { nodes, mode: 'main-article' };
+
+        // 策略 4：最后兜底 —— main 里有 .markdown 的块
+        const mds = Array.from(document.querySelectorAll('main .markdown, main [class*="markdown"]'));
+        if (mds.length) return { nodes: mds, mode: 'markdown-only' };
+
+        return { nodes: [], mode: 'none' };
+    }
+
+    function nodeRole(node, index, mode) {
+        if (mode === 'role-attr') {
+            return node.getAttribute('data-message-author-role') || (index % 2 === 0 ? 'user' : 'assistant');
+        }
+        const inner = node.querySelector('[data-message-author-role]');
+        if (inner) return inner.getAttribute('data-message-author-role');
+        const testid = node.getAttribute('data-testid') || '';
+        if (/user/i.test(testid)) return 'user';
+        if (/assistant/i.test(testid)) return 'assistant';
+        // 按奇偶推断：ChatGPT 对话总是 user 开头
+        return index % 2 === 0 ? 'user' : 'assistant';
+    }
+
+    function nodeText(node, mode) {
+        // 优先只取正文 markdown 容器，避免把按钮/标题/无障碍标签带进来
+        const container =
+            node.querySelector('.markdown') ||
+            node.querySelector('[class*="markdown"]') ||
+            node.querySelector('[data-message-author-role]') ||
+            node;
+        return cleanText(container.innerText || container.textContent || '');
+    }
+
+    // 策略 5：按 "You said / ChatGPT said" 文案切分正文（任何 UI 结构都能兜底）
+    function splitByLabels() {
+        const main = document.querySelector('main');
+        if (!main) return [];
+        const text = main.innerText || '';
+        const re = /(?:^|\n)\s*(You said:|ChatGPT said:|你说：|你说:|ChatGPT 说：|ChatGPT 说:)\s*/g;
+        const matches = [...text.matchAll(re)];
+        if (!matches.length) return [];
+        const parts = [];
+        matches.forEach((mm, i) => {
+            const start = mm.index + mm[0].length;
+            const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+            const role = /ChatGPT/i.test(mm[1]) ? 'assistant' : 'user';
+            const body = cleanText(text.slice(start, end));
+            if (body) parts.push({ role, text: body });
+        });
+        return parts;
+    }
+
+    function extractFromDOM() {
+        const { nodes, mode } = pickTurnNodes();
+        const messages = [];
+        nodes.forEach((node, i) => {
+            const role = nodeRole(node, i, mode);
+            const text = nodeText(node, mode);
+            if (text) messages.push({ role, text });
+        });
+
+        let usedMode = mode;
+        if (!messages.length) {
+            const labeled = splitByLabels();
+            if (labeled.length) {
+                messages.push(...labeled);
+                usedMode = 'label-split';
+            }
+        }
+
+        const diag = {
+            mode: usedMode,
+            articles: document.querySelectorAll('article[data-testid^="conversation-turn-"]').length,
+            roleNodes: document.querySelectorAll('[data-message-author-role]').length,
+            markdownBlocks: document.querySelectorAll('main .markdown').length,
+            mainExists: !!document.querySelector('main'),
+            collected: messages.length,
+            sampleHtml: nodes[0] ? String(nodes[0].outerHTML || '').slice(0, 600) : ''
+        };
+        LOG('DOM 诊断', diag);
+
+        return {
+            payload: {
+                source: 'chatgpt_web',
+                conversation_id: getConversationId() || `web-${Date.now()}`,
+                title: pageTitle(),
+                project_id: 'paper_reading',
+                messages
+            },
+            diag
+        };
+    }
+
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    // ---------------- 备用下载 ----------------
+    function downloadPayload(data, note) {
         const filename = `chatgpt-web-${data.conversation_id || Date.now()}.json`;
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -179,77 +287,117 @@
         a.href = url;
         a.download = filename;
         a.click();
-        URL.revokeObjectURL(url);
-        showToast(`⚠️ 本地服务未运行，已下载为 <b>${filename}</b>。<br/>请将其放入 <code>paper_sync_data/inbox/</code>`, false, 6000);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast(
+            `⚠️ ${note || '本地服务未连接'}<br/>已下载 <b>${filename}</b>，请拖入 ` +
+            `<code>paper_sync_data/inbox/</code> 后运行 <code>python -m paper_sync sync</code>`,
+            false, 8000
+        );
     }
 
-    // 执行同步主流程
-    async function syncCurrentConversation() {
+    // ---------------- 主流程 ----------------
+    async function syncCurrentConversation(ev) {
         const btn = document.getElementById('papersync-float-btn');
         const convId = getConversationId();
         if (!convId) {
-            showToast('⚠️ 未检测到有效会话，请先进入具体的论文对话', false);
+            showToast('⚠️ 当前页面不是具体会话（URL 中没有 /c/...），请先打开论文对话', false);
             return;
         }
 
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '⏳ 正在提取...';
+        const originalHTML = btn.innerHTML;
+        btn.classList.add('busy');
 
-        let payload = await fetchNativeConversation(convId);
-        if (!payload) {
-            payload = extractFromDOM();
+        let payload = null;
+
+        // 1) 原生接口
+        btn.innerHTML = '⏳ 读取会话…';
+        const apiData = await apiFetchConversation(convId);
+        if (apiData) {
+            payload = apiData;
+        } else {
+            // 2) DOM 提取（首次为空时等待渲染再重试一次）
+            btn.innerHTML = '⏳ 解析页面…';
+            let { payload: domPayload, diag } = extractFromDOM();
+            if (!domPayload.messages.length) {
+                await sleep(1200);
+                ({ payload: domPayload, diag } = extractFromDOM());
+            }
+            if (domPayload.messages.length) {
+                payload = domPayload;
+            } else {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('busy');
+                showToast(
+                    `❌ 提取失败：页面里没找到消息节点。<br/>` +
+                    `诊断：article=${diag.articles}，role节点=${diag.roleNodes}，` +
+                    `markdown=${diag.markdownBlocks}，main=${diag.mainExists ? '有' : '无'}。<br/>` +
+                    `请确认会话已加载完成，并按 F12 看 Console 的 <code>[PaperSync]</code> 日志。`,
+                    false, 12000
+                );
+                console.warn('[PaperSync] 提取失败诊断', diag,
+                    '如果页面结构特殊，请把这段日志发给开发者。');
+                return;
+            }
         }
 
-        if (!payload || (payload.messages && payload.messages.length === 0)) {
-            showToast('❌ 提取失败：未在页面中找到消息内容', false);
-            btn.innerHTML = originalText;
+        // Shift+点击：只下载不推送
+        if (ev && ev.shiftKey) {
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('busy');
+            downloadPayload(payload, '已跳过推送（Shift+点击）');
             return;
         }
 
-        btn.innerHTML = '🚀 正在推送到知识库...';
+        btn.innerHTML = '🚀 推送中…';
 
-        // 发送给本地接收服务
         GM_xmlhttpRequest({
             method: 'POST',
             url: `${LOCAL_SERVER}/api/inbox`,
             data: JSON.stringify(payload),
             headers: { 'Content-Type': 'application/json; charset=utf-8' },
-            timeout: 10000,
-            onload: function (resp) {
-                btn.innerHTML = originalText;
-                if (resp.status === 200) {
-                    try {
-                        const res = JSON.parse(resp.responseText);
-                        showToast(`<b>✅ 同步成功！</b><br/>${res.message || '已入库'}<br/><span style="color:#8e8ea0;font-size:11px;">文件: ${res.file}</span>`, true, 5000);
-                    } catch (e) {
-                        showToast('✅ 同步请求已接收！', true);
-                    }
+            timeout: 60000,
+            onload: resp => {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('busy');
+                let res = null;
+                try { res = JSON.parse(resp.responseText); } catch (e) { /* ignore */ }
+                if (resp.status === 200 && res && res.ok) {
+                    const warn = res.sync_status && res.sync_status !== 'success';
+                    showToast(
+                        `<b>${warn ? '⚠️ 已入库（同步有告警）' : '✅ 同步成功！'}</b><br/>` +
+                        `${res.message || ''}<br/>` +
+                        `<span style="color:#8e8ea0;font-size:11px;">文件：${res.file || ''}</span>`,
+                        !warn, 6000
+                    );
                 } else {
-                    fallbackDownload(payload);
+                    downloadPayload(payload, `本地服务返回 ${resp.status}`);
                 }
             },
-            onerror: function () {
-                btn.innerHTML = originalText;
-                fallbackDownload(payload);
+            onerror: () => {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('busy');
+                isServerAlive = false;
+                const dot = document.getElementById('papersync-status-dot');
+                if (dot) dot.classList.remove('online');
+                downloadPayload(payload, '连不上本地服务（127.0.0.1:8765）');
             }
         });
     }
 
-    // 注入按钮
+    // ---------------- 注入按钮 ----------------
     function ensureButton() {
+        if (!document.body) return;
         if (document.getElementById('papersync-float-btn')) return;
         const btn = document.createElement('button');
         btn.id = 'papersync-float-btn';
         btn.innerHTML = '<span id="papersync-status-dot"></span><span>📥 同步到论文库</span>';
-        btn.title = '将当前 ChatGPT 论文讨论会话推送到本地博客论文库草稿';
+        btn.title = '一键把当前 ChatGPT 会话同步到论文知识库（Shift+点击 = 只下载 JSON）';
         btn.addEventListener('click', syncCurrentConversation);
         document.body.appendChild(btn);
         checkServerHealth();
     }
 
-    // 初始化与路由监听
     ensureButton();
     setInterval(ensureButton, 2000);
-    setInterval(checkServerHealth, 10000);
-
+    setInterval(checkServerHealth, 15000);
 })();

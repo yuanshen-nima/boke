@@ -26,6 +26,17 @@ def _safe_name(text: str) -> str:
     return cleaned[:48] or "unnamed"
 
 
+def _llm_ready() -> bool:
+    """检测 AI 归纳配置是否可用；不可用时自动降级为离线确定性提取，避免同步整体失败。"""
+    try:
+        if not config.load_private_config().get("ai", {}).get("enabled", True):
+            return False
+        cfg = config.load_deepseek_config()
+        return bool(cfg.get("base_url") and cfg.get("api_key") and cfg.get("model"))
+    except Exception:
+        return False
+
+
 class InboxRequestHandler(BaseHTTPRequestHandler):
     auto_sync: bool = True
     server_version = "PaperSyncInbox/1.0"
@@ -121,7 +132,7 @@ class InboxRequestHandler(BaseHTTPRequestHandler):
         # 自动触发同步管线
         if self.auto_sync:
             try:
-                ps = PaperSync(offline=False)
+                ps = PaperSync(offline=not _llm_ready())
                 sync_ret = ps.sync()
                 ps.close()
                 result["sync_status"] = "success" if sync_ret == 0 else "sync_warning"

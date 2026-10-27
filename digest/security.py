@@ -55,7 +55,7 @@ def load_security_config() -> dict:
         "sensitive_keywords": [],  # 归纳结果出现这些词即转草稿（如未公开的项目代号）
     }
     try:
-        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
         sec = cfg.get("security") or {}
         defaults.update({k: v for k, v in sec.items() if k in defaults})
     except (OSError, json.JSONDecodeError):
