@@ -44,11 +44,13 @@ class ParsedConversation:
             t = m.text.strip()
             if len(t) < 800:
                 continue
-            # 特征 1：明确以论文精读/深度解读为标题
-            if re.search(r"^#\s*(论文精读|论文解读|深度解读)", t, re.MULTILINE):
+            # 特征 1：标题包含论文 + 精读/解读/分析（如 # 论文精读、# 论文深度精读、# 论文解读、# 深度解读）
+            if re.search(r"^#\s*(?:论文)?.*?(?:精读|解读|深度分析)", t, re.MULTILINE):
                 return t
-            # 特征 2：包含总体深度解读或多级章节分析
-            if ("总体深度解读" in t or "一、研究目标" in t) and ("二、创新方法" in t or "核心方法" in t):
+            # 特征 2：结构化章节（包含总体解读 + 至少两章深度分析）
+            has_overview = any(k in t for k in ("总体深度解读", "总体解读", "研究背景", "研究目标"))
+            has_method = any(k in t for k in ("核心方法", "创新方法", "新方法", "方法原理", "机制是什么", "核心机制", "模型结构"))
+            if has_overview and has_method:
                 return t
         return None
 
@@ -145,25 +147,48 @@ def clean_chatgpt_artifacts(text: str) -> str:
 def extract_report_meta(text: str) -> dict:
     """从论文精读报告正文或头部解析结构化元信息。"""
     meta: dict = {}
-    m = re.search(r"(?:\*\*论文名称[：:]\*\*|论文名称[：:])\s*(.+)", text)
+    m = re.search(r"^#\s*(?:论文)?.*?[：:]\s*(.+)", text, re.MULTILINE)
     if m:
         meta["title"] = m.group(1).strip()
-    m = re.search(r"(?:\*\*中文译名[：:]\*\*|中文译名[：:])\s*(.+)", text)
+    m = re.search(
+        r"(?:\*\*论文名称[：:]\*\*|论文名称[：:]|\*\*论文题目[：:]\*\*|论文题目[：:])\s*(.+)",
+        text,
+    )
     if m:
-        meta["chinese_title"] = m.group(1).strip()
-    m = re.search(r"(?:\*\*作者[：:]\*\*|作者[：:])\s*(.+)", text)
+        meta["title"] = m.group(1).strip()
+    m = re.search(
+        r"(?:\*\*中文译名[：:]\*\*|中文译名[：:]|\*\*中文题目[：:]\*\*|中文题目[：:]|\*\*中文标题[：:]\*\*|中文标题[：:])\s*(.+)",
+        text,
+    )
     if m:
-        meta["authors"] = [a.strip() for a in re.split(r"[、,，]", m.group(1)) if a.strip()]
-    m = re.search(r"(?:\*\*机构[：:]\*\*|机构[：:])\s*(.+)", text)
+        meta["chinese_title"] = re.sub(r"[\*#_]+$", "", m.group(1)).strip()
+    m = re.search(
+        r"(?:[-*]\s*作者[：:]|(?:\*\*作者[：:]\*\*|作者[：:]))\s*(.+)", text
+    )
+    if m:
+        raw_authors = re.sub(r"\s+等$", "", m.group(1).strip())
+        meta["authors"] = [a.strip() for a in re.split(r"[、,，]", raw_authors) if a.strip()]
+    m = re.search(
+        r"(?:[-*]\s*机构[：:]|(?:\*\*机构[：:]\*\*|机构[：:]))\s*(.+)", text
+    )
     if m:
         meta["institution"] = m.group(1).strip()
     m = re.search(
-        r"(?:\*\*开源地址[：:]\*\*|开源地址[：:]|代码仓库[：:])\s*(?:\[.*?\]\((https?://[^\s\)]+)\)|(https?://\S+))",
+        r"(?:[-*]\s*发表[：:]|(?:\*\*发表[：:]\*\*|发表[：:]|\*\*发表场所[：:]\*\*|发表场所[：:]))\s*(.+)",
+        text,
+    )
+    if m:
+        meta["venue"] = m.group(1).strip()
+        m_year = re.search(r"\b(202\d)\b", meta["venue"])
+        if m_year:
+            meta["year"] = int(m_year.group(1))
+    m = re.search(
+        r"(?:[-*]\s*开源(?:地址|代码)[：:]|(?:\*\*(?:开源地址|开源代码|代码仓库)[：:]\*\*|(?:开源地址|开源代码|代码仓库)[：:]))\s*(?:\[.*?\]\((https?://[^\s\)]+)\)|(https?://\S+))",
         text,
     )
     if m:
         meta["github_url"] = (m.group(1) or m.group(2) or "").strip()
-    m = re.search(r"## 总体深度解读\s*\n\n(.*?)(?=\n\n|\Z)", text, re.DOTALL)
+    m = re.search(r"## 总体深度解读.*?\n\n(.*?)(?=\n\n|\Z)", text, re.DOTALL)
     if m:
         meta["summary"] = re.sub(r"[\*#\[\]]", "", m.group(1)).strip()
     return meta
