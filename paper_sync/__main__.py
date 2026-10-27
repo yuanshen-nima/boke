@@ -17,7 +17,6 @@ import sys
 from pathlib import Path
 
 from . import config
-from .lock import SyncLock
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -105,13 +104,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         config.ensure_dirs()
         exit_code = 0
-        with SyncLock(config.LOCK_FILE):
-            ps = PaperSync(offline=args.offline, log=log)
+        # 注意：不要在这里再套一层 SyncLock —— ps.sync() 内部已加锁，
+        # 同进程重复加锁会自我阻塞并误报「另一个同步进程正在运行」。
+        ps = PaperSync(offline=args.offline, log=log)
+        try:
             for t in targets:
                 dest = config.INBOX_DIR / t.name
                 dest.write_bytes(t.read_bytes())
                 log.info(f"已放入 inbox：{t.name}")
                 exit_code = max(exit_code, ps.sync())
+        finally:
             ps.close()
         return exit_code
 

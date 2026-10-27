@@ -73,13 +73,13 @@ PaperSync 本地接收服务已启动: http://127.0.0.1:8765
 - **Q：如何开机自启本地接收服务？**
   - 可以把 `paper_sync\start-server.bat` 的快捷方式放入 Windows 开机启动文件夹（按 `Win + R` 输入 `shell:startup` 回车），即可随电脑启动在后台常驻。
 - **Q：脚本版本如何升级？**
-  - 打开 `paper_sync/chatgpt-paper-sync.user.js`，全选覆盖油猴里已有的旧脚本并保存即可。当前版本 `1.1.0`。
+  - 打开 `paper_sync/chatgpt-paper-sync.user.js`，全选覆盖油猴里已有的旧脚本并保存即可。当前版本 `1.1.1`。
 
 ---
 
-## 🛠️ 提取失败排查（v1.1.0）
+## 🛠️ 提取失败排查（v1.1.1）
 
-按钮点击后若提示 **「提取失败：页面里没找到消息节点」**，说明脚本的两种提取途径都没拿到内容。v1.1.0 的提取顺序是：
+按钮点击后若提示 **「提取失败：页面里没找到消息节点」**，说明脚本的两种提取途径都没拿到内容。v1.1.1 的提取顺序是：
 
 1. **站内接口**（最优先）：先取 `/api/auth/session` 的 accessToken，再请求 `/backend-api/conversation/<id>`，拿到官方完整消息树（含公式、代码，质量最好）。
 2. **DOM 多级选择器**：`article[data-testid^="conversation-turn-"]` → `[data-message-author-role]` → `main article` → `main .markdown`。
@@ -98,6 +98,39 @@ PaperSync 本地接收服务已启动: http://127.0.0.1:8765
 **调试入口**：按 `F12` → Console，过滤 `[PaperSync]`，能看到接口状态码、DOM 诊断计数和首个节点的 HTML 片段，便于定位。
 
 **永远可用的兜底**：`Shift + 点击` 按钮 = 只下载 JSON 不推送，适合本地服务没开时先存一份到 `paper_sync_data/inbox/`。
+
+---
+
+## ⚠️ 提示「连不上本地服务（127.0.0.1:8765）」怎么办
+
+这条提示说明**提取已经成功**，只是本地接收服务没在跑（按钮左侧的小圆点是灰色）。二选一：
+
+**方式一（推荐）：把服务跑起来，再点一次按钮**
+
+```cmd
+:: 在仓库根目录双击，或命令行执行
+paper_sync\start-server.bat
+```
+看到下面这行就代表就绪，窗口**不要关**（关掉即停止服务）：
+```
+PaperSync 本地接收服务已启动: http://127.0.0.1:8765
+```
+此时按钮的圆点会变绿，再点【📥 同步到论文库】就会直接入库并自动生成草稿。
+
+> 想开机常驻：把 `start-server.bat` 的快捷方式放进 `Win + R` → `shell:startup`。
+
+**方式二：用已下载的 JSON 直接导入**
+
+脚本会先把会话下载成 `chatgpt-web-<会话ID>.json`，在仓库根目录执行：
+
+```cmd
+python -m paper_sync import-note "%USERPROFILE%\Downloads\chatgpt-web-<会话ID>.json"
+```
+
+它会自动把文件放进 inbox 并立即同步出草稿。
+
+**排查连接问题**：在本机浏览器直接打开 <http://127.0.0.1:8765/health>，正常应返回 `{"ok": true, ...}`。
+若打不开，检查：① 服务窗口是否被关掉；② 8765 端口是否被其它程序占用（`netstat -ano | findstr 8765`）。
 
 ---
 

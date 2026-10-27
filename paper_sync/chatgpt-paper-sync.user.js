@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         ChatGPT 论文阅读会话一键同步到博客知识库 (PaperSync)
 // @namespace    https://github.com/yuanshen-nima/boke
-// @version      1.1.0
+// @version      1.1.1
 // @description  在 ChatGPT 页面上一键提取当前论文讨论会话，直接推送到本地 PaperSync 知识库生成私有草稿
 // @author       liang boyu
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @connect      127.0.0.1
 // @connect      localhost
 // @run-at       document-idle
@@ -90,6 +92,12 @@
                 isServerAlive = r.status === 200;
                 const dot = document.getElementById('papersync-status-dot');
                 if (dot) dot.classList.toggle('online', isServerAlive);
+                if (isServerAlive) {
+                    try {
+                        const info = JSON.parse(r.responseText);
+                        if (info && info.inbox_dir) GM_setValue('inbox_dir', info.inbox_dir);
+                    } catch (e) { /* ignore */ }
+                }
             },
             onerror: () => {
                 isServerAlive = false;
@@ -288,10 +296,18 @@
         a.download = filename;
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        let inboxDir = '';
+        try { inboxDir = GM_getValue('inbox_dir', '') || ''; } catch (e) { /* ignore */ }
+        const where = inboxDir ? `<code>${inboxDir}</code>` : '<code>paper_sync_data/inbox</code>';
+
         showToast(
-            `⚠️ ${note || '本地服务未连接'}<br/>已下载 <b>${filename}</b>，请拖入 ` +
-            `<code>paper_sync_data/inbox/</code> 后运行 <code>python -m paper_sync sync</code>`,
-            false, 8000
+            `⚠️ ${note || '本地服务未连接'}<br/>` +
+            `已下载 <b>${filename}</b>，两种入库方式任选其一：<br/>` +
+            `① 双击 <code>paper_sync\\start-server.bat</code> 启动服务后，重新点按钮；<br/>` +
+            `② 把它放入 ${where}，或在仓库目录执行：<br/>` +
+            `<code>python -m paper_sync import-note "下载目录\\${filename}"</code>`,
+            false, 15000
         );
     }
 

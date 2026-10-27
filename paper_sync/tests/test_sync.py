@@ -148,6 +148,28 @@ class TestBasicImport(BaseTest):
         self.assertEqual(papers[0]["paper_id"], "doi:10.1007/978-3-031-20047-2_1")
         self.assertEqual(papers[0]["status"], "draft")
 
+    def test_cli_import_note_does_not_deadlock(self):
+        """回归：CLI import-note 曾在外层加锁、内部 sync 再加锁而自我阻塞。"""
+        from paper_sync.__main__ import main as cli_main
+
+        p = self._note()
+        self.assertEqual(cli_main(["import-note", str(p), "--offline"]), 0)
+        self.assertEqual(len(self._state().list_papers()), 1)
+
+    def test_web_chat_with_bom_file(self):
+        """回归：带 UTF-8 BOM 的采集文件（记事本/PowerShell 保存）必须能解析。"""
+        p = self.config.INBOX_DIR / "web-bom.json"
+        self.config.INBOX_DIR.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "source": "chatgpt_web",
+            "conversation_id": "conv-bom",
+            "title": "BOM 兼容测试",
+            "messages": [{"role": "user", "text": "DOI: 10.7777/bom.test.1"}],
+        }
+        p.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8-sig")
+        self.assertEqual(self._sync(), 0)
+        self.assertEqual(len(self._state().list_papers()), 1)
+
 
 # ---------------------------------------------------------------- 场景 C/D（幂等/增量）
 class TestIncremental(BaseTest):
@@ -306,6 +328,17 @@ class TestIdentity(BaseTest):
         title_pid, conf2 = identity.make_paper_id(title="Some Title")
         self.assertFalse(conf2)
         self.assertEqual(identity.normalize_title("Some  Title!"), identity.normalize_title("some title"))
+
+    def test_arxiv_label_detected(self):
+        """回归：'arXiv: 2304.06808' 这类裸编号（无 arxiv.org 链接）也要识别。"""
+        from paper_sync import identity
+
+        doi, arxiv = identity.find_identifiers("详见 arXiv: 2304.06808 的实验部分")
+        self.assertEqual(arxiv, "2304.06808")
+        self.assertEqual(doi, "")
+        # 没有 arXiv 关键字的裸编号不得误判为 arXiv
+        _, none_arxiv = identity.find_identifiers("版本号 2304.06808 与本文无关")
+        self.assertEqual(none_arxiv, "")
 
     def test_broken_json_recorded_not_fatal(self):
         self.config.INBOX_DIR.mkdir(parents=True, exist_ok=True)
