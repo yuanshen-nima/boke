@@ -8,7 +8,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import config, identity, normalize, render, security
+from . import config, identity, normalize, render, security, sources
 from .lock import SyncLock
 from .state import StateDB, now
 
@@ -225,6 +225,18 @@ class PaperSync:
         # 归纳（脱敏后发送；离线模式确定性提取）
         meta_new, _ = normalize.extract(text, ai_enabled=not self.offline)
         meta_new["paper_id"] = paper_id
+
+        # 检测会话中是否包含高质量现成论文精读长文
+        paper_report = conv.find_paper_report()
+        if paper_report:
+            report_meta = sources.extract_report_meta(paper_report)
+            meta_new["deep_dive"] = paper_report
+            for k, v in report_meta.items():
+                if v and (not meta_new.get(k) or k in ("chinese_title", "institution", "summary", "github_url")):
+                    meta_new[k] = v
+            if report_meta.get("title") and (not meta_new.get("title") or meta_new["title"].startswith("web-")):
+                meta_new["title"] = report_meta["title"]
+
         if not meta_new.get("title"):
             meta_new["title"] = conv.title if source_type != "chatgpt_export" else ""
         if not confident:
@@ -248,7 +260,7 @@ class PaperSync:
                 render.write_changes_report(paper_dir, conv.conversation_key, conflicts)
                 self.log.warning(f"  论文 {paper_id} 有 {len(conflicts)} 处字段冲突，已生成差异报告")
             human_block, _ = render.split_draft_md(
-                (paper_dir / "draft.md").read_text(encoding="utf-8")
+                (paper_dir / "draft.md").read_text(encoding="utf-8-sig")
             )
             paper_status = state.get_paper(paper_id)["status"]
             self.log.info(f"  合并到已有论文 {paper_id}")
@@ -273,7 +285,7 @@ class PaperSync:
 
         render.save_meta(paper_dir, meta)
         (paper_dir / "draft.md").write_text(
-            render.render_draft_md(meta, discussions, human_block), encoding="utf-8"
+            render.render_draft_md(meta, discussions, human_block), encoding="utf-8-sig"
         )
         normalized_hash = sha256_text(json.dumps(meta, ensure_ascii=False, sort_keys=True))
         state.upsert_paper(
@@ -314,7 +326,7 @@ class PaperSync:
         if not meta:
             self.log.error(f"缺少草稿数据：{paper_dir}")
             return 1
-        draft_md = (paper_dir / "draft.md").read_text(encoding="utf-8")
+        draft_md = (paper_dir / "draft.md").read_text(encoding="utf-8-sig")
         human_block, _ = render.split_draft_md(draft_md)
         md = render.render_public_md(
             meta, meta.get("discussions") or [], human_block, updated=datetime.now().strftime("%Y-%m-%d")

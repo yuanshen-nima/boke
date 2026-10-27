@@ -8,6 +8,7 @@ SourceAdapter 是预留接口（Source C）：未来若出现官方授权的 Pro
 from __future__ import annotations
 
 import json
+import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,138 @@ class ParsedConversation:
             who = "用户" if m.role == "user" else ("助手" if m.role == "assistant" else m.role)
             lines.append(f"{who}：{m.text}")
         return "\n\n".join(lines)
+
+    def find_paper_report(self) -> str | None:
+        """从会话消息中寻找现成的高质量论文精读长文。"""
+        for m in self.messages:
+            if m.role != "assistant":
+                continue
+            t = m.text.strip()
+            if len(t) < 800:
+                continue
+            # 特征 1：明确以论文精读/深度解读为标题
+            if re.search(r"^#\s*(论文精读|论文解读|深度解读)", t, re.MULTILINE):
+                return t
+            # 特征 2：包含总体深度解读或多级章节分析
+            if ("总体深度解读" in t or "一、研究目标" in t) and ("二、创新方法" in t or "核心方法" in t):
+                return t
+        return None
+
+
+def genui_to_markdown(raw_json: str) -> str:
+    """将 ChatGPT 的 genui 交互图表组件（charts_widget_v2）转为标准 Markdown 表格。"""
+    try:
+        obj = json.loads(raw_json)
+        cw = obj.get("charts_widget_v2", {}).get("content", {})
+        if not cw:
+            return ""
+        meta = cw.get("meta", {})
+        title = meta.get("title", "")
+        desc = meta.get("description", "")
+        series = cw.get("series", [])
+        data = cw.get("data", [])
+        x_key = cw.get("xKey", "")
+
+        lines = []
+        if title:
+            lines.append(f"**{title}**")
+        if desc:
+            lines.append(f"*{desc}*")
+        lines.append("")
+
+        x_col = "类别"
+        if x_key == "dataset":
+            x_col = "数据集"
+        elif x_key == "stage":
+            x_col = "阶段"
+
+        headers = [x_col]
+        for s in series:
+            headers.append(s.get("label", s.get("dataKey", "")))
+        lines.append("| " + " | ".join(headers) + " |")
+        lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+
+        for row in data:
+            x_val = str(row.get(x_key, ""))
+            vals = [x_val]
+            for s in series:
+                k = s.get("dataKey", "")
+                vals.append(str(row.get(k, "")))
+            lines.append("| " + " | ".join(vals) + " |")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def clean_chatgpt_artifacts(text: str) -> str:
+    """清理 ChatGPT 特有的内部标记与自定义组件标签，还原标准 Markdown。"""
+    if not text:
+        return ""
+
+    # 1. genui charts -> Markdown table
+    def _replace_genui(m):
+        raw = m.group(1)
+        md = genui_to_markdown(raw)
+        return "\n\n" + md + "\n\n" if md else ""
+
+    text = re.sub(r"[\ue200\ue201]?genui[\ue202\ue203](.*?)[\ue200\ue201]", _replace_genui, text, flags=re.DOTALL)
+
+    # 2. 还原 ChatGPT 内部链接标记：\ue200url\ue202Title\ue202Url\ue201 -> [Title](Url)
+    text = re.sub(r"[\ue200\ue201]?url[\ue202\ue203](.*?)[\ue202\ue203](.*?)[\ue200\ue201]", r"[\1](\2)", text)
+
+    # 3. 实体标记：\ue200entity\ue202["type","Name",...]\ue201 -> Name
+    text = re.sub(r"[\ue200\ue201]?entity[\ue202\ue203]\[\"[^\"]*\",\"([^\"]*)\"[^\]]*\][\ue200\ue201]", r"\1", text)
+
+    # 4. 文件引用与搜索引用标记：彻底清除
+    text = re.sub(r"[\ue200\ue201]?filecite[\ue202\ue203].*?[\ue200\ue201]", "", text)
+    text = re.sub(r"[\ue200\ue201]?cite[\ue202\ue203].*?[\ue200\ue201]", "", text)
+    text = re.sub(r"[\ue200\ue201]?image_group[\ue202\ue203].*?[\ue200\ue201]", "", text)
+
+    # 5. 去除多余的 PUA 控制字符 (\ue200 - \ue20f)
+    text = re.sub(r"[\ue200-\ue20f]", "", text)
+
+    # 6. 去除 ChatGPT 自定义组件标签
+    text = re.sub(r"<MemoryCite\s*/>", "", text)
+    text = re.sub(r"<FileCite[^>]*/>", "", text)
+    text = re.sub(r"<AsyncImage[^>]*/>", "", text)
+
+    # 7. 转换 Math 公式：\[ \] -> $$ $$, \( \) -> $ $
+    text = re.sub(r"\\\[(.*?)\\\]", r"$$\n\1\n$$", text, flags=re.DOTALL)
+    text = re.sub(r"\\\((.*?)\\\)", r"$\1$", text)
+
+    # 8. 修复被反斜杠转义的 Markdown 加粗标记 \*\* -> **
+    text = re.sub(r"\\\*\\\*", "**", text)
+
+    # 9. 清理多余连续换行
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def extract_report_meta(text: str) -> dict:
+    """从论文精读报告正文或头部解析结构化元信息。"""
+    meta: dict = {}
+    m = re.search(r"(?:\*\*论文名称[：:]\*\*|论文名称[：:])\s*(.+)", text)
+    if m:
+        meta["title"] = m.group(1).strip()
+    m = re.search(r"(?:\*\*中文译名[：:]\*\*|中文译名[：:])\s*(.+)", text)
+    if m:
+        meta["chinese_title"] = m.group(1).strip()
+    m = re.search(r"(?:\*\*作者[：:]\*\*|作者[：:])\s*(.+)", text)
+    if m:
+        meta["authors"] = [a.strip() for a in re.split(r"[、,，]", m.group(1)) if a.strip()]
+    m = re.search(r"(?:\*\*机构[：:]\*\*|机构[：:])\s*(.+)", text)
+    if m:
+        meta["institution"] = m.group(1).strip()
+    m = re.search(
+        r"(?:\*\*开源地址[：:]\*\*|开源地址[：:]|代码仓库[：:])\s*(?:\[.*?\]\((https?://[^\s\)]+)\)|(https?://\S+))",
+        text,
+    )
+    if m:
+        meta["github_url"] = (m.group(1) or m.group(2) or "").strip()
+    m = re.search(r"## 总体深度解读\s*\n\n(.*?)(?=\n\n|\Z)", text, re.DOTALL)
+    if m:
+        meta["summary"] = re.sub(r"[\*#\[\]]", "", m.group(1)).strip()
+    return meta
 
 
 class SourceError(Exception):
@@ -149,11 +282,18 @@ def _walk_messages(conv: dict) -> tuple[list[ParsedMessage], list[str]]:
         role = (msg.get("author") or {}).get("role") or ""
         content = msg.get("content") or {}
         ctype = content.get("content_type", "")
-        if ctype == "text":
+        # 优先读取 ChatGPT 导出的高质量标准 Markdown
+        dil = msg.get("metadata", {}).get("model_dil_v2", {})
+        fb = dil.get("fallbackMarkdown") if isinstance(dil, dict) else None
+        if fb and isinstance(fb, str) and fb.strip():
+            text = clean_chatgpt_artifacts(fb.strip())
+        elif ctype == "text":
             parts = content.get("parts") or []
-            text = "\n".join(str(p) for p in parts if isinstance(p, str) and p.strip())
-            if text.strip() and role in ("user", "assistant"):
-                messages.append(ParsedMessage(role=role, text=text.strip()))
+            text = clean_chatgpt_artifacts("\n".join(str(p) for p in parts if isinstance(p, str) and p.strip()))
+        else:
+            text = ""
+        if text.strip() and role in ("user", "assistant"):
+            messages.append(ParsedMessage(role=role, text=text.strip()))
         elif ctype == "multimodal_text":
             # 导出数据不含可下载的图片本体，只记录缺失资源
             for part in content.get("parts") or []:
@@ -245,7 +385,13 @@ def parse_web_messages(data: dict, path: Path) -> ParsedConversation:
         role = m.get("role", "user")
         text = m.get("text") or m.get("content") or ""
         if isinstance(text, str) and text.strip():
-            messages.append(ParsedMessage(role=role, text=text.strip(), time=str(m.get("time") or "")))
+            messages.append(
+                ParsedMessage(
+                    role=role,
+                    text=clean_chatgpt_artifacts(text.strip()),
+                    time=str(m.get("time") or ""),
+                )
+            )
     cid = data.get("conversation_id") or data.get("id") or ("web:" + path.stem)
     return ParsedConversation(
         conversation_key=str(cid),

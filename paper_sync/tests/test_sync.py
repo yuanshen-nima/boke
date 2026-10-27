@@ -170,6 +170,38 @@ class TestBasicImport(BaseTest):
         self.assertEqual(self._sync(), 0)
         self.assertEqual(len(self._state().list_papers()), 1)
 
+    def test_paper_report_preserved_in_full(self):
+        """场景：当会话中包含长篇论文精读（如 # 论文精读...）时，完整保留为 deep_dive，不应被压缩成干巴摘要。"""
+        full_report = (
+            "# 论文精读：测试论文深度解读\n\n"
+            "**论文名称：** Deep Reading Full Test Paper\n\n"
+            "**中文译名：** 深度精读测试论文\n\n"
+            "**作者：** 张三、李四\n\n"
+            "## 总体深度解读\n\n这是一段深度解读正文，详细剖析了研究背景与动机。\n\n"
+            "### 一、研究目标\n\n探讨多目标跟踪外观判别问题。\n\n"
+            "### 二、创新方法\n\n提出自适应变换机制。\n"
+        )
+        web_conv = {
+            "source": "chatgpt_web",
+            "conversation_id": "conv-deep-dive-001",
+            "title": "测试论文深度精读",
+            "messages": [
+                {"role": "user", "text": "请精读 arXiv: 2401.99999 这篇论文"},
+                {"role": "assistant", "text": full_report * 3},
+            ],
+        }
+        p = self.config.INBOX_DIR / "web-deep.json"
+        self.config.INBOX_DIR.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(web_conv, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(self._sync(), 0)
+        papers = self._state().list_papers()
+        self.assertTrue(any(p["paper_id"] == "arxiv:2401.99999" for p in papers))
+        paper_dir = self.config.PAPERS_DIR / "arxiv_2401.99999"
+        draft_text = (paper_dir / "draft.md").read_text(encoding="utf-8")
+        self.assertIn("## 总体深度解读", draft_text)
+        self.assertIn("### 一、研究目标", draft_text)
+        self.assertIn("### 二、创新方法", draft_text)
+
 
 # ---------------------------------------------------------------- 场景 C/D（幂等/增量）
 class TestIncremental(BaseTest):

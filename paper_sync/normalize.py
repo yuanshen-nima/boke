@@ -24,6 +24,8 @@ class SensitiveMaterialError(Exception):
 
 META_FIELDS_SCHEMA_NOTE = """{
   "title": "论文英文标题",
+  "chinese_title": "论文中文译名或中文标题，未知填空串",
+  "institution": "第一作者或主要研究机构/实验室，未知填空串",
   "authors": ["作者1", "作者2"],
   "year": 2024,
   "venue": "会议或期刊名，如 CVPR / TPAMI，未知填空串",
@@ -31,7 +33,7 @@ META_FIELDS_SCHEMA_NOTE = """{
   "arxiv": "arXiv 编号如 2304.06808，未知填空串",
   "paper_url": "论文官方地址，未知填空串",
   "github_url": "官方或主要代码仓库，未知填空串",
-  "summary": "3~5 句中文核心摘要",
+  "summary": "3~5 句中文核心摘要（概括研究问题、核心思路与主要结论）",
   "background": "研究背景（中文）",
   "problem": "要解决的核心问题（中文）",
   "method": "核心方法原理（中文，保留关键术语英文）",
@@ -40,7 +42,8 @@ META_FIELDS_SCHEMA_NOTE = """{
   "experiments": {"setup": "数据集与设置", "results": [{"dataset": "数据集", "metrics": {"HOTA": 77.3}, "verified": false}]},
   "limitations": ["论文不足，逐条"],
   "my_notes": ["用户在对话中表达的个人观点/启发，没有则空数组"],
-  "missing": ["对话中提到但无法落实的信息，如图片、附件"]
+  "missing": ["对话中提到但无法落实的信息，如图片、附件"],
+  "deep_dive": "若素材已包含成体系的深度精读报告长文，请以 Markdown 格式提取该长文；无则填空串"
 }"""
 
 
@@ -143,6 +146,8 @@ def _offline_extract(text: str) -> dict:
 def _empty_meta() -> dict:
     return {
         "title": "",
+        "chinese_title": "",
+        "institution": "",
         "authors": [],
         "year": None,
         "venue": "",
@@ -160,6 +165,7 @@ def _empty_meta() -> dict:
         "limitations": [],
         "my_notes": [],
         "missing": [],
+        "deep_dive": "",
         "ai_extracted": False,
     }
 

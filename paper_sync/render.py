@@ -19,7 +19,21 @@ HUMAN_BEGIN = "<!-- human:begin 人工笔记区（同步永不覆盖） -->"
 HUMAN_END = "<!-- human:end -->"
 
 LIST_FIELDS = ("authors", "contributions", "limitations", "my_notes", "missing")
-SCALAR_FIELDS = ("title", "venue", "doi", "arxiv", "paper_url", "github_url", "summary", "background", "problem", "method")
+SCALAR_FIELDS = (
+    "title",
+    "chinese_title",
+    "institution",
+    "venue",
+    "doi",
+    "arxiv",
+    "paper_url",
+    "github_url",
+    "summary",
+    "background",
+    "problem",
+    "method",
+    "deep_dive",
+)
 
 
 def now_iso() -> str:
@@ -58,7 +72,11 @@ def merge_meta(existing: dict, incoming: dict) -> tuple[dict, list[str]]:
         if new and not old:
             meta[f] = new
         elif new and old and str(new) != str(old):
-            conflicts.append(f"{f}: 保留「{str(old)[:60]}」，未采用「{str(new)[:60]}」")
+            # 若新传入了更丰富完整的精读长文，允许平滑升级
+            if f == "deep_dive" and len(str(new)) > len(str(old)):
+                meta[f] = new
+            else:
+                conflicts.append(f"{f}: 保留「{str(old)[:60]}」，未采用「{str(new)[:60]}」")
     if incoming.get("year") and not meta.get("year"):
         meta["year"] = incoming["year"]
     # 公式：按 latex 去重合并
@@ -89,8 +107,12 @@ def merge_meta(existing: dict, incoming: dict) -> tuple[dict, list[str]]:
 
 def _meta_table(meta: dict) -> str:
     rows = []
+    if meta.get("chinese_title"):
+        rows.append(("中文译名", meta["chinese_title"]))
     if meta.get("authors"):
-        rows.append(("作者", "、".join(meta["authors"]) + "（来源：对话/笔记，未核实）"))
+        rows.append(("作者", "、".join(meta["authors"]) + ("（来源：对话/笔记，未核实）" if meta.get("ai_extracted") else "")))
+    if meta.get("institution"):
+        rows.append(("研究机构", meta["institution"]))
     if meta.get("year"):
         rows.append(("年份", meta["year"]))
     if meta.get("venue"):
@@ -107,40 +129,78 @@ def _meta_table(meta: dict) -> str:
 
 
 def render_machine_block(meta: dict, discussions: list[dict]) -> str:
-    parts = [MACHINE_BEGIN, f"# {meta.get('title') or '(未命名论文)'}", ""]
-    if meta.get("ai_extracted"):
-        parts.append("> ⚠️ 本条目由 AI 从对话中提取，所有公式与实验数字均未核实，引用前请对照原文。\n")
-    tbl = _meta_table(meta)
-    if tbl:
-        parts += ["| 字段 | 值 |", "| --- | --- |", tbl, ""]
-    if meta.get("summary"):
-        parts += ["## 核心摘要", meta["summary"], ""]
-    for key, label in (("background", "研究背景"), ("problem", "主要问题"), ("method", "核心方法")):
-        if meta.get(key):
-            parts += [f"## {label}", meta[key], ""]
-    if meta.get("formulas"):
-        parts.append("## 关键公式")
-        for f in meta["formulas"]:
-            state = "已核实" if f.get("verified") else "**未核实**"
-            parts += [f"$\n{f.get('latex', '')}\n$", f"- {f.get('explanation', '')}（核验状态：{state}）", ""]
-    if meta.get("contributions"):
-        parts.append("## 创新贡献")
-        parts += [f"- {c}" for c in meta["contributions"]] + [""]
-    exp = meta.get("experiments") or {}
-    if exp.get("setup") or exp.get("results"):
-        parts.append("## 实验")
-        if exp.get("setup"):
-            parts += [f"设置：{exp['setup']}", ""]
-        for r in exp.get("results") or []:
-            state = "已核实" if r.get("verified") else "**未核实**"
-            parts.append(f"- {r.get('dataset', '?')}：{json.dumps(r.get('metrics', {}), ensure_ascii=False)}（核验状态：{state}）")
-        parts.append("")
-    if meta.get("limitations"):
-        parts.append("## 论文局限")
-        parts += [f"- {c}" for c in meta["limitations"]] + [""]
-    if meta.get("my_notes"):
-        parts.append("## 我的研究启发（来自对话）")
-        parts += [f"- {c}" for c in meta["my_notes"]] + [""]
+    parts = [MACHINE_BEGIN]
+    warning = "> ⚠️ 本条目由 AI 从对话中提取，所有公式与实验数字均未核实，引用前请对照原文。\n" if meta.get("ai_extracted") else ""
+
+    # 优先：如果有完整的精读长文
+    if meta.get("deep_dive"):
+        deep_dive = meta["deep_dive"].strip()
+        tbl = _meta_table(meta)
+        m_h1 = re.search(r"^(#\s+[^\n]+)", deep_dive)
+        if m_h1:
+            h1 = m_h1.group(1)
+            rest = deep_dive[len(h1):].strip()
+            # 移除 rest 开头可能重复出现的简单元信息行（以表格形式统一呈现更美观）
+            rest = re.sub(
+                r"^(\*\*(?:论文名称|中文译名|作者|机构|论文版本|开源地址|代码仓库)[：:].*?\n+)+",
+                "",
+                rest,
+                flags=re.MULTILINE,
+            ).strip()
+            parts.append(h1)
+            parts.append("")
+            if warning:
+                parts.append(warning)
+            if tbl:
+                parts += ["| 字段 | 值 |", "| --- | --- |", tbl, ""]
+            parts.append(rest)
+            parts.append("")
+        else:
+            parts.append(f"# {meta.get('title') or '(未命名论文)'}")
+            parts.append("")
+            if warning:
+                parts.append(warning)
+            if tbl:
+                parts += ["| 字段 | 值 |", "| --- | --- |", tbl, ""]
+            parts.append(deep_dive)
+            parts.append("")
+    else:
+        # 兜底：无长文精读时的经典结构化字段渲染
+        parts += [f"# {meta.get('title') or '(未命名论文)'}", ""]
+        if warning:
+            parts.append(warning)
+        tbl = _meta_table(meta)
+        if tbl:
+            parts += ["| 字段 | 值 |", "| --- | --- |", tbl, ""]
+        if meta.get("summary"):
+            parts += ["## 核心摘要", meta["summary"], ""]
+        for key, label in (("background", "研究背景"), ("problem", "主要问题"), ("method", "核心方法")):
+            if meta.get(key):
+                parts += [f"## {label}", meta[key], ""]
+        if meta.get("formulas"):
+            parts.append("## 关键公式")
+            for f in meta["formulas"]:
+                state = "已核实" if f.get("verified") else "**未核实**"
+                parts += [f"$\n{f.get('latex', '')}\n$", f"- {f.get('explanation', '')}（核验状态：{state}）", ""]
+        if meta.get("contributions"):
+            parts.append("## 创新贡献")
+            parts += [f"- {c}" for c in meta["contributions"]] + [""]
+        exp = meta.get("experiments") or {}
+        if exp.get("setup") or exp.get("results"):
+            parts.append("## 实验")
+            if exp.get("setup"):
+                parts += [f"设置：{exp['setup']}", ""]
+            for r in exp.get("results") or []:
+                state = "已核实" if r.get("verified") else "**未核实**"
+                parts.append(f"- {r.get('dataset', '?')}：{json.dumps(r.get('metrics', {}), ensure_ascii=False)}（核验状态：{state}）")
+            parts.append("")
+        if meta.get("limitations"):
+            parts.append("## 论文局限")
+            parts += [f"- {c}" for c in meta["limitations"]] + [""]
+        if meta.get("my_notes"):
+            parts.append("## 我的研究启发（来自对话）")
+            parts += [f"- {c}" for c in meta["my_notes"]] + [""]
+
     if discussions:
         parts.append("## 讨论记录")
         for d in discussions:
