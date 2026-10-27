@@ -50,7 +50,7 @@ export const navBarConfig: NavBarConfig = {
 		LinkPreset.About,
 		{
 			name: "GitHub",
-			url: "https://github.com/yourname", // TODO: 改成你的 GitHub 主页或仓库地址
+			url: "https://github.com/yuanshen-nima",
 			external: true, // Show an external link icon and will open in a new tab
 		},
 	],
@@ -58,13 +58,13 @@ export const navBarConfig: NavBarConfig = {
 
 export const profileConfig: ProfileConfig = {
 	avatar: "assets/images/demo-avatar.png", // TODO: 替换为你的头像，放到 src/assets/images/ 下
-	name: "博主", // TODO: 改成你的名字/昵称
+	name: "liang boyu",
 	bio: "欢迎来到我的小站，这里记录我的学习笔记与思考。",
 	links: [
 		{
 			name: "GitHub",
 			icon: "fa6-brands:github",
-			url: "https://github.com/yourname", // TODO: 改成你的 GitHub 主页
+			url: "https://github.com/yuanshen-nima",
 		},
 		{
 			name: "Email",

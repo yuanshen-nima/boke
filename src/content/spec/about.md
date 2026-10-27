@@ -8,11 +8,11 @@
 
 - [Astro](https://astro.build/) + [Fuwari](https://github.com/saicaca/fuwari) 主题
 - 托管在 [Cloudflare Pages](https://pages.cloudflare.com/)
-- 评论系统基于 GitHub Discussions（[Giscus](https://giscus.app/zh-CN)）
+- 评论系统基于 [Waline](https://waline.js.org/)（支持图片上传/表情），备选 [Giscus](https://giscus.app/zh-CN)
 
 ## 联系我
 
-- GitHub：[yourname](https://github.com/yourname)
+- GitHub：[yuanshen-nima](https://github.com/yuanshen-nima)
 - 邮箱：your@email.com
 
 :::note
