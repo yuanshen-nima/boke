@@ -95,10 +95,8 @@ class PaperSync:
         m = __import__("re").search(r"论文标题[:：]\s*(.+)", text)
         if m:
             title = m.group(1).strip()
-        if not (doi or arxiv) and source_type == "note_json":
-            # 笔记 JSON 的标题是结构化字段，可用于标题匹配
-            title = title or conv.title
-        if not (doi or arxiv) and source_type == "note_md":
+        if not (doi or arxiv) and source_type in ("note_json", "note_md", "chatgpt_web"):
+            # 笔记或网页采集的标题可用于标题匹配
             title = title or conv.title
         paper_id, confident = identity.make_paper_id(doi=doi, arxiv=arxiv, title=title)
         return paper_id, confident

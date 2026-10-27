@@ -50,6 +50,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--force", action="store_true", help="安全扫描命中仍强制发布")
     p.add_argument("--no-push", action="store_true", help="只写入仓库不推送")
 
+    p = sub.add_parser("serve", help="启动本地 HTTP 接收服务（供油猴脚本直接同步）")
+    p.add_argument("--host", default="127.0.0.1", help="监听地址（默认 127.0.0.1）")
+    p.add_argument("--port", type=int, default=8765, help="监听端口（默认 8765）")
+    p.add_argument("--no-auto-sync", action="store_true", help="写入 inbox 后不自动触发同步")
+
     sub.add_parser("test", help="运行离线测试套件")
 
     args = ap.parse_args(argv)
@@ -130,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
             return ps.publish(args.paper_id, force=args.force, no_push=args.no_push)
         finally:
             ps.close()
+
+    if args.cmd == "serve":
+        from .server import run_server
+
+        run_server(host=args.host, port=args.port, auto_sync=not args.no_auto_sync)
+        return 0
 
     return 0
 

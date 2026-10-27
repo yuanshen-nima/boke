@@ -96,10 +96,10 @@ draft: false        # true 则不发布
 
 ## 论文知识库（paper_sync）
 
-论文精读笔记系统：从 ChatGPT 官方数据导出或单篇结构化笔记导入，AI 归纳成标准条目（方法/公式/实验/局限/个人启发），私有草稿 → 人工审核 → 安全发布到 `/papers/`。完整文档见 `docs/paper-sync-*.md`。
+论文精读笔记系统：支持通过 **Tampermonkey 油猴脚本在 ChatGPT 网页端一键同步**、ChatGPT 官方数据导出或单篇结构化笔记导入，AI 归纳成标准条目（方法/公式/实验/局限/个人启发），私有草稿 → 人工审核 → 安全发布到 `/papers/`。完整文档见 `docs/paper-sync-*.md` 及 `docs/chatgpt-tampermonkey-sync-guide.md`。
 
 ```bash
-python -m paper_sync import-note 笔记.json   # 导入（或 import-export 导入 ChatGPT 导出包）
+# 方式 1（推荐）：双击 paper_sync/start-server.bat，在 ChatGPT 网页端直接点【📥 同步到论文库】
 python -m paper_sync list --status draft     # 查看待审
 python -m paper_sync approve <id>            # 人工审核
 python -m paper_sync publish <id>            # 安全扫描后发布

@@ -48,7 +48,7 @@ def parse_source(path: Path) -> tuple[list[ParsedConversation], str]:
         # ChatGPT 官方导出：zip 包，或 conversations.json（含分卷）
         return parse_chatgpt_export(p), "chatgpt_export"
     if p.suffix.lower() == ".json":
-        return parse_note_json(p), "note_json"
+        return parse_json_source(p)
     if p.suffix.lower() in (".md", ".markdown"):
         return [parse_note_md(p)], "note_md"
     raise SourceError(f"不支持的输入类型：{p.name}（支持 zip / conversations.json / .json / .md）")
@@ -237,17 +237,57 @@ def parse_chatgpt_export(path: Path) -> list[ParsedConversation]:
 
 
 # ---------------------------------------------------------------- Source B
-def parse_note_json(path: Path) -> list[ParsedConversation]:
-    """单篇结构化笔记（JSON，schema 见 docs/chatgpt-paper-export-prompt.md）。
+def parse_web_messages(data: dict, path: Path) -> ParsedConversation:
+    """解析浏览器端油猴脚本提取的会话消息列表。"""
+    raw_msgs = data.get("messages") or []
+    messages = []
+    for m in raw_msgs:
+        role = m.get("role", "user")
+        text = m.get("text") or m.get("content") or ""
+        if isinstance(text, str) and text.strip():
+            messages.append(ParsedMessage(role=role, text=text.strip(), time=str(m.get("time") or "")))
+    cid = data.get("conversation_id") or data.get("id") or ("web:" + path.stem)
+    return ParsedConversation(
+        conversation_key=str(cid),
+        title=str(data.get("title") or path.stem),
+        project_id=str(data.get("project_id") or ""),
+        messages=messages,
+        missing_resources=list(data.get("missing_resources") or []),
+    )
 
-    整个 JSON 作为一条「会话」进入管线：字段序列化为文本，供归纳层提取。
-    """
+
+def parse_json_source(path: Path) -> tuple[list[ParsedConversation], str]:
+    """智能解析 JSON 文件：优先区分 ChatGPT 网页端单会话、ChatGPT 官方导出与单篇结构化笔记。"""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        content = path.read_text(encoding="utf-8")
+        data = json.loads(content)
     except json.JSONDecodeError as e:
-        raise SourceError(f"笔记 JSON 无法解析 {path.name}：{e}") from e
+        raise SourceError(f"JSON 无法解析 {path.name}：{e}") from e
     if not isinstance(data, dict):
-        raise SourceError(f"笔记 JSON 顶层应为对象：{path.name}")
+        raise SourceError(f"JSON 顶层应为对象：{path.name}")
+
+    # 1. 顶层包含 mapping：ChatGPT 官方单个会话导出对象
+    if "mapping" in data:
+        messages, missing = _walk_messages(data)
+        key = _conv_key(data, content[:4096])
+        conv = ParsedConversation(
+            conversation_key=key,
+            title=str(data.get("title") or path.stem),
+            project_id=str(data.get("project_id") or ""),
+            messages=messages,
+            missing_resources=missing,
+        )
+        return [conv], "chatgpt_web"
+
+    # 2. 包含 messages 列表：油猴脚本提取的标准会话结构
+    if "messages" in data and isinstance(data["messages"], list):
+        return [parse_web_messages(data, path)], "chatgpt_web"
+
+    # 3. 默认单篇结构化笔记
+    return parse_note_json_data(data, path), "note_json"
+
+
+def parse_note_json_data(data: dict, path: Path) -> list[ParsedConversation]:
     lines = [f"论文标题：{data.get('paper_title', '')}"]
     if data.get("authors"):
         lines.append("作者：" + "、".join(str(a) for a in data["authors"]))
@@ -290,6 +330,20 @@ def parse_note_json(path: Path) -> list[ParsedConversation]:
         missing_resources=[],
     )
     return [conv]
+
+
+def parse_note_json(path: Path) -> list[ParsedConversation]:
+    """单篇结构化笔记（JSON，schema 见 docs/chatgpt-paper-export-prompt.md）。
+
+    整个 JSON 作为一条「会话」进入管线：字段序列化为文本，供归纳层提取。
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise SourceError(f"笔记 JSON 无法解析 {path.name}：{e}") from e
+    if not isinstance(data, dict):
+        raise SourceError(f"笔记 JSON 顶层应为对象：{path.name}")
+    return parse_note_json_data(data, path)
 
 
 def parse_note_md(path: Path) -> ParsedConversation:

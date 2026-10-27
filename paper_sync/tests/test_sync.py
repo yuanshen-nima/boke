@@ -127,6 +127,27 @@ class TestBasicImport(BaseTest):
         self.assertEqual(meta["experiments"]["results"], [])
         self.assertEqual(meta["summary"], "")  # 不编造缺失内容
 
+    def test_web_chat_import(self):
+        """场景：油猴脚本采集的 ChatGPT 单会话格式导入。"""
+        web_conv = {
+            "source": "chatgpt_web",
+            "conversation_id": "conv-web-12345",
+            "title": "ByteTrack 论文讨论",
+            "project_id": "paper_reading",
+            "messages": [
+                {"role": "user", "text": "请分析这篇论文：DOI 10.1007/978-3-031-20047-2_1 ByteTrack"},
+                {"role": "assistant", "text": "ByteTrack 是一篇经典多目标跟踪论文..."},
+            ],
+        }
+        p = self.config.INBOX_DIR / "web-1.json"
+        self.config.INBOX_DIR.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(web_conv, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(self._sync(), 0)
+        papers = self._state().list_papers()
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(papers[0]["paper_id"], "doi:10.1007/978-3-031-20047-2_1")
+        self.assertEqual(papers[0]["status"], "draft")
+
 
 # ---------------------------------------------------------------- 场景 C/D（幂等/增量）
 class TestIncremental(BaseTest):
