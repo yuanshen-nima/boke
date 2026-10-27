@@ -38,3 +38,6 @@ digest/config.json
 digest/work/
 digest/__pycache__/
 __pycache__/
+
+# sync logs
+logs/
