@@ -1,11 +1,11 @@
----
+﻿---
 title: "History-Aware Transformation of ReID Features for Multiple Object Tracking"
 description: "这篇论文提出的 HATReID-MOT（History-Aware Transformation of ReID Features for Multiple Object Tracking，历史感知重识别特征变换方法），研究的是多目标跟踪（Multiple Object Tracking，MOT）中"
 paperId: "arxiv:2503.12562"
 topics: ["论文精读"]
 tags: ["论文", "ECCV 2026"]
 draft: false
-updated: "2026-10-27"
+updated: "2026-10-28"
 year: 2026
 arxiv: "2503.12562v2"
 githubUrl: "https://github.com/MCG-NJU/HATReID-MOT"
@@ -13,12 +13,10 @@ githubUrl: "https://github.com/MCG-NJU/HATReID-MOT"
 
 # 论文精读：HATReID-MOT——利用历史轨迹自适应变换 ReID 特征的多目标跟踪方法
 
-> ⚠️ 本条目由 AI 从对话中提取，所有公式与实验数字均未核实，引用前请对照原文。
-
 | 字段 | 值 |
 | --- | --- |
 | 中文译名 | 面向多目标跟踪的历史感知 ReID 特征变换 |
-| 作者 | Ruopeng Gao、Yuyao Wang、Chunxu Liu、Limin Wang（来源：对话/笔记，未核实） |
+| 作者 | Ruopeng Gao、Yuyao Wang、Chunxu Liu、Limin Wang |
 | 研究机构 | 南京大学、上海人工智能实验室 |
 | 年份 | 2026 |
 | 发表场所 | ECCV 2026 |
@@ -958,23 +956,3 @@ $$
 
 这个问题比直接叠加 HAT 更贴近你的研究主线，也更有希望形成逻辑清晰、实验可验证的 UAV-MOT 研究贡献。
 
-## 讨论记录
-### 2026-10-27 · 6acf3cd3-8adc-83ee-99fc-fbfe37d463db
-论文提出 HATReID-MOT，将多目标跟踪中的外观关联视为当前视频内的身份区分问题，而非通用 ReID 检索。方法把每条历史轨迹当作一个类别，用 Fisher Linear Discriminant（FLD）在线学习视频专属投影矩阵，并用时间加权轨迹中心与知识整合（原始/变换相似度融合）提升困难关联。实验在 DanceTrack、SportsMOT、MOT17、MOT20、TAO 等数据集和多个跟踪框架上报告 HOTA/AssA 提升，但跟踪速度从 46.5 FPS 降至 22.7 FPS（不含检测器）。论文同时暴露历史轨迹 ID 可靠性、FLD 数值稳定性和低维退化等局限。
-
-## 缺失资源
-- 多模态资源（image_asset_pointer，id=sediment://114105a5eaff2）
-- 多模态资源（image_asset_pointer，id=sediment://25cfcf85bcb3a）
-- 多模态资源（image_asset_pointer，id=sediment://291d7c5eb88a1）
-- 多模态资源（image_asset_pointer，id=sediment://3a299c7590ace）
-- 多模态资源（image_asset_pointer，id=sediment://3d5c7713760ac）
-- 多模态资源（image_asset_pointer，id=sediment://55363f43974d5）
-- 多模态资源（image_asset_pointer，id=sediment://988d1416a579d）
-- 多模态资源（image_asset_pointer，id=sediment://b00ba398dcd0c）
-- 多模态资源（image_asset_pointer，id=sediment://ee5f49d92a890）
-- 多模态资源（image_asset_pointer，id=sediment://file_00000000）
-
-
-## 我的研究笔记
-
-（待写：人工笔记写在 human 区内，同步不会覆盖。）

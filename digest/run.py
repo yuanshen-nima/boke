@@ -126,6 +126,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="每日对话归纳")
     ap.add_argument("--date", default=datetime.now().strftime("%Y-%m-%d"))
     ap.add_argument("--no-llm", action="store_true", help="不调 API，生成话题清单版")
+    ap.add_argument("--publish", action="store_true", help="允许公开发布（默认作为私密草稿保存，公网构建自动排除）")
     ap.add_argument("--no-push", action="store_true", help="只生成文章，不 git 发布")
     ap.add_argument("--force", action="store_true", help="跳过安全拦截，强制发布（人工确认后使用）")
     args = ap.parse_args()
@@ -181,7 +182,7 @@ def main() -> int:
             cfg = summarize.load_config()
             body = summarize.summarize(material, cfg)
             log(f"LLM 归纳完成（{cfg['model']}，正文 {len(body)} 字符）")
-            draft = False
+            draft = not args.publish  # 默认作为私有草稿保存（draft: true），公网构建时自动排除
         except Exception as err:
             log(f"归纳失败：{err}")
             log("素材已保留，可修复配置后重跑；当天未发布")
