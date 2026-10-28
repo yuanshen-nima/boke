@@ -106,3 +106,12 @@ export const expressiveCodeConfig: ExpressiveCodeConfig = {
 	// Please select a dark theme, as this blog theme currently only supports dark background color
 	theme: "github-dark",
 };
+
+// 私密专区（AI 对话日报）访问密码保护配置
+export const privateZoneConfig = {
+	enable: true,
+	// 访问密码：访问日常 AI 对话专区（/posts/daily-*）时的解锁密码
+	// 默认为 "boke"，您可以在这里直接修改为您专属的访问密码
+	password: "boke",
+	hint: "此篇为日常 AI 对话精读与讨论纪要，请输入访问密码解锁查看",
+};
