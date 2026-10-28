@@ -51,13 +51,18 @@ class InboxRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Requested-With")
 
     def _send_json(self, status: HTTPStatus, payload: dict) -> None:
-        raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(raw)))
-        self._send_cors_headers()
-        self.end_headers()
-        self.wfile.write(raw)
+        try:
+            raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(raw)
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError) as e:
+            logging.getLogger("paper_sync.server").info(
+                "客户端已提前断开连接（%s: %s），本地数据已安全写入", type(e).__name__, e
+            )
 
     def do_OPTIONS(self) -> None:
         """处理浏览器跨域预检请求。"""
@@ -123,27 +128,30 @@ class InboxRequestHandler(BaseHTTPRequestHandler):
 
         result = {
             "ok": True,
-            "message": "已成功保存到 inbox",
+            "message": "已成功保存到 inbox 并已启动后台同步处理",
             "file": target_path.name,
             "conversation_id": cid,
             "title": title,
+            "sync_status": "success",
         }
 
-        # 自动触发同步管线
-        if self.auto_sync:
-            try:
-                ps = PaperSync(offline=not _llm_ready())
-                sync_ret = ps.sync()
-                ps.close()
-                result["sync_status"] = "success" if sync_ret == 0 else "sync_warning"
-                result["message"] = "已接收并触发草稿同步，请进入私有草稿审核"
-            except Exception as e:
-                logging.getLogger("paper_sync.server").error("Auto sync failed: %s", e)
-                result["sync_status"] = "failed"
-                result["sync_error"] = str(e)
-                result["message"] = "已保存到 inbox，但自动同步遇到错误，文件已留存待重试"
-
         self._send_json(HTTPStatus.OK, result)
+
+        # 异步触发同步管线，避免大文件/大模型解析耗时导致浏览器端请求超时或提前断开
+        if self.auto_sync:
+            def _background_sync():
+                try:
+                    ps = PaperSync(offline=not _llm_ready())
+                    sync_ret = ps.sync()
+                    ps.close()
+                    logging.getLogger("paper_sync.server").info(
+                        "后台同步完成: %s (返回码: %d)", target_path.name, sync_ret
+                    )
+                except Exception as e:
+                    logging.getLogger("paper_sync.server").error("Auto sync failed: %s", e)
+
+            import threading
+            threading.Thread(target=_background_sync, daemon=True).start()
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8765, auto_sync: bool = True) -> None:

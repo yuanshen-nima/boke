@@ -8,7 +8,7 @@ import hashlib
 import re
 import unicodedata
 
-DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"'<>，。；]+", re.IGNORECASE)
+DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"'<>，。；\]\[\(\)]+", re.IGNORECASE)
 ARXIV_URL_RE = re.compile(r"\barxiv\.org/(?:abs|pdf)/([0-9]{4}\.[0-9]{4,5})(v\d+)?", re.IGNORECASE)
 # 明确带「arXiv」字样的裸编号，例如 "arXiv: 2304.06808"（必须出现 arXiv 关键词，避免误匹配）
 ARXIV_LABEL_RE = re.compile(r"\barxiv\s*(?:id)?\s*[:：]?\s*([0-9]{4}\.[0-9]{4,5})(v\d+)?\b", re.IGNORECASE)
@@ -16,6 +16,7 @@ ARXIV_LABEL_RE = re.compile(r"\barxiv\s*(?:id)?\s*[:：]?\s*([0-9]{4}\.[0-9]{4,5
 
 def normalize_doi(doi: str) -> str:
     doi = doi.strip().lower()
+    doi = re.split(r"[\]\[\(\)]", doi)[0]
     doi = re.sub(r"^https?://(dx\.)?doi\.org/", "", doi)
     doi = re.sub(r"^doi\s*[:：]\s*", "", doi)
     return doi.rstrip(".,;）)")
