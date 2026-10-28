@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT 论文阅读会话一键同步到博客知识库 (PaperSync)
 // @namespace    https://github.com/yuanshen-nima/boke
-// @version      1.1.1
+// @version      1.2.0
 // @description  在 ChatGPT 页面上一键提取当前论文讨论会话，直接推送到本地 PaperSync 知识库生成私有草稿
 // @author       liang boyu
 // @match        https://chatgpt.com/*
@@ -149,54 +149,109 @@
 
     async function apiFetchConversation(convId) {
         const token = await getAccessToken();
-        const endpoints = [
-            `/backend-api/conversation/${convId}`,
-            `/backend-api/conversations/${convId}`,
-        ];
-        for (const url of endpoints) {
+        const url = `/backend-api/conversation/${convId}`;
+        const timeoutMs = 45000; // 长论文会话 JSON 大 (1~3MB)，给足 45 秒超时，避免被提前 abort
+
+        const btn = document.getElementById('papersync-float-btn');
+
+        // 尝试方式 1：标准 window.fetch (带 45s 超时)
+        for (let attempt = 1; attempt <= 2; attempt++) {
             try {
-                const headers = { 'Content-Type': 'application/json' };
+                if (btn) btn.innerHTML = `⏳ 读取接口 (${attempt}/2)…`;
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                };
                 if (token) headers['Authorization'] = `Bearer ${token}`;
-                LOG('尝试接口', url, token ? '(带 token)' : '(仅 Cookie)');
+                LOG(`尝试接口 (第 ${attempt} 次)`, url, token ? '(带 token)' : '(仅 Cookie)');
+
                 const ctrl = new AbortController();
-                const timer = setTimeout(() => ctrl.abort(), 8000);
+                const timer = setTimeout(() => ctrl.abort(new Error(`API 超时 (${timeoutMs / 1000}s)`)), timeoutMs);
+
                 const resp = await fetch(url, {
                     credentials: 'include',
                     headers,
                     signal: ctrl.signal
                 });
                 clearTimeout(timer);
-                LOG('接口响应', url, resp.status);
-                if (!resp.ok) continue;
-                const data = await resp.json();
-                if (data && data.mapping && Object.keys(data.mapping).length) {
-                    LOG('接口提取成功，节点数', Object.keys(data.mapping).length);
-                    return data;
+
+                LOG('接口响应状态', url, resp.status);
+                if (resp.status === 200) {
+                    const data = await resp.json();
+                    if (data && data.mapping && Object.keys(data.mapping).length) {
+                        LOG('接口提取成功，节点数', Object.keys(data.mapping).length);
+                        return data;
+                    }
                 }
             } catch (e) {
-                LOG('接口异常', url, e);
+                LOG(`接口异常 (第 ${attempt} 次)`, url, e);
             }
         }
+
+        // 尝试方式 2：使用油猴特权 GM_xmlhttpRequest 兜底 (绕过前端拦截与跨域限制)
+        try {
+            if (btn) btn.innerHTML = '⏳ GM读取接口…';
+            LOG('尝试 GM_xmlhttpRequest 备用通道', url);
+            const gmData = await new Promise(resolve => {
+                const headers = { 'Accept': 'application/json' };
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: `${window.location.origin}${url}`,
+                    headers,
+                    timeout: 45000,
+                    onload: res => {
+                        if (res.status === 200) {
+                            try {
+                                const d = JSON.parse(res.responseText);
+                                if (d && d.mapping && Object.keys(d.mapping).length) {
+                                    resolve(d);
+                                    return;
+                                }
+                            } catch (err) { /* ignore */ }
+                        }
+                        resolve(null);
+                    },
+                    onerror: () => resolve(null),
+                    ontimeout: () => resolve(null)
+                });
+            });
+            if (gmData) {
+                LOG('GM 接口提取成功，节点数', Object.keys(gmData.mapping).length);
+                return gmData;
+            }
+        } catch (e) {
+            LOG('GM 接口异常', e);
+        }
+
         return null;
     }
 
     // ---------------- 提取途径 2：DOM 多级选择器 ----------------
     function pickTurnNodes() {
-        // 策略 1：新版 chatgpt.com 的 article 轮次
-        let nodes = Array.from(document.querySelectorAll('article[data-testid^="conversation-turn-"]'));
-        if (nodes.length) return { nodes, mode: 'article' };
+        // 策略 1：[data-testid^="conversation-turn-"] (不限 article，div/section 均可)
+        let nodes = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"], [data-testid*="conversation-turn"]'));
+        if (nodes.length) return { nodes, mode: 'test-id-turn' };
 
-        // 策略 2：角色属性节点
+        // 策略 2：ChatGPT 常用类名
+        nodes = Array.from(document.querySelectorAll('div[class*="conversation-turn"], [class*="agent-turn"], [class*="user-turn"]'));
+        if (nodes.length) return { nodes, mode: 'class-turn' };
+
+        // 策略 3：角色属性节点
         nodes = Array.from(document.querySelectorAll('[data-message-author-role]'));
         if (nodes.length) return { nodes, mode: 'role-attr' };
 
-        // 策略 3：通用 article / 消息滚动容器内的直接子块
-        nodes = Array.from(document.querySelectorAll('main article'));
+        // 策略 4：消息唯一标识块
+        nodes = Array.from(document.querySelectorAll('[data-message-id]'));
+        if (nodes.length) return { nodes, mode: 'message-id' };
+
+        // 策略 5：main 内部的 article / section
+        nodes = Array.from(document.querySelectorAll('main article, main section'));
         if (nodes.length) return { nodes, mode: 'main-article' };
 
-        // 策略 4：最后兜底 —— main 里有 .markdown 的块
-        const mds = Array.from(document.querySelectorAll('main .markdown, main [class*="markdown"]'));
-        if (mds.length) return { nodes: mds, mode: 'markdown-only' };
+        // 策略 6：所有 markdown / prose 块
+        const mds = Array.from(document.querySelectorAll('main .markdown, main [class*="markdown"], main .prose, main [class*="prose"]'));
+        if (mds.length) return { nodes: mds, mode: 'prose-blocks' };
 
         return { nodes: [], mode: 'none' };
     }
@@ -205,38 +260,50 @@
         if (mode === 'role-attr') {
             return node.getAttribute('data-message-author-role') || (index % 2 === 0 ? 'user' : 'assistant');
         }
-        const inner = node.querySelector('[data-message-author-role]');
-        if (inner) return inner.getAttribute('data-message-author-role');
-        const testid = node.getAttribute('data-testid') || '';
-        if (/user/i.test(testid)) return 'user';
-        if (/assistant/i.test(testid)) return 'assistant';
+        const innerRole = node.querySelector('[data-message-author-role]');
+        if (innerRole) return innerRole.getAttribute('data-message-author-role');
+        const testid = ((node.getAttribute('data-testid') || '') + ' ' + (node.className || '')).toLowerCase();
+        if (testid.includes('user')) return 'user';
+        if (testid.includes('assistant') || testid.includes('agent')) return 'assistant';
+        // 如果包含复制/重试按钮，或者包含复杂的 markdown / prose 结构，大概率是 assistant
+        if (node.querySelector('.markdown, [class*="markdown"], .prose, [class*="prose"], [data-testid*="copy"], button[aria-label*="Copy"], button[aria-label*="复制"]')) {
+            return 'assistant';
+        }
         // 按奇偶推断：ChatGPT 对话总是 user 开头
         return index % 2 === 0 ? 'user' : 'assistant';
     }
 
     function nodeText(node, mode) {
-        // 优先只取正文 markdown 容器，避免把按钮/标题/无障碍标签带进来
+        // 克隆节点并过滤无关按钮与无障碍图标
+        const clone = node.cloneNode(true);
+        const toRemove = clone.querySelectorAll('button, svg, [role="button"], [data-testid*="action"], [class*="action"], .sr-only');
+        toRemove.forEach(el => el.remove());
+
         const container =
-            node.querySelector('.markdown') ||
-            node.querySelector('[class*="markdown"]') ||
-            node.querySelector('[data-message-author-role]') ||
-            node;
+            clone.querySelector('.markdown') ||
+            clone.querySelector('[class*="markdown"]') ||
+            clone.querySelector('.prose') ||
+            clone.querySelector('[class*="prose"]') ||
+            clone.querySelector('[class*="whitespace-pre-wrap"]') ||
+            clone;
         return cleanText(container.innerText || container.textContent || '');
     }
 
-    // 策略 5：按 "You said / ChatGPT said" 文案切分正文（任何 UI 结构都能兜底）
+    // 策略 5：按 "You said / ChatGPT said / User / Assistant" 文案切分正文
     function splitByLabels() {
         const main = document.querySelector('main');
         if (!main) return [];
-        const text = main.innerText || '';
-        const re = /(?:^|\n)\s*(You said:|ChatGPT said:|你说：|你说:|ChatGPT 说：|ChatGPT 说:)\s*/g;
+        const clone = main.cloneNode(true);
+        clone.querySelectorAll('button, svg, [role="button"], nav').forEach(el => el.remove());
+        const text = clone.innerText || '';
+        const re = /(?:^|\n)\s*(You said:|ChatGPT said:|你说：|你说:|ChatGPT 说：|ChatGPT 说:|User:|Assistant:|Model:)\s*/g;
         const matches = [...text.matchAll(re)];
         if (!matches.length) return [];
         const parts = [];
         matches.forEach((mm, i) => {
             const start = mm.index + mm[0].length;
             const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
-            const role = /ChatGPT/i.test(mm[1]) ? 'assistant' : 'user';
+            const role = /ChatGPT|Assistant|Model/i.test(mm[1]) ? 'assistant' : 'user';
             const body = cleanText(text.slice(start, end));
             if (body) parts.push({ role, text: body });
         });
@@ -261,14 +328,29 @@
             }
         }
 
+        // 策略 6 兜底：如果依然没拿到独立消息，检查 main 中是否有现成的长文精读
+        if (!messages.length) {
+            const main = document.querySelector('main');
+            if (main) {
+                const clone = main.cloneNode(true);
+                clone.querySelectorAll('button, svg, nav').forEach(el => el.remove());
+                const fullText = cleanText(clone.innerText || '');
+                if (fullText && fullText.length > 500 && (fullText.includes('论文精读') || fullText.includes('论文解读') || fullText.includes('总体深度解读'))) {
+                    messages.push({ role: 'assistant', text: fullText });
+                    usedMode = 'main-fulltext';
+                }
+            }
+        }
+
         const diag = {
             mode: usedMode,
-            articles: document.querySelectorAll('article[data-testid^="conversation-turn-"]').length,
+            turns: document.querySelectorAll('[data-testid^="conversation-turn-"], [data-testid*="conversation-turn"]').length,
+            articles: document.querySelectorAll('article').length,
             roleNodes: document.querySelectorAll('[data-message-author-role]').length,
-            markdownBlocks: document.querySelectorAll('main .markdown').length,
+            markdownBlocks: document.querySelectorAll('main .markdown, main [class*="markdown"], main .prose').length,
             mainExists: !!document.querySelector('main'),
             collected: messages.length,
-            sampleHtml: nodes[0] ? String(nodes[0].outerHTML || '').slice(0, 600) : ''
+            sampleHtml: nodes[0] ? String(nodes[0].outerHTML || '').slice(0, 400) : ''
         };
         LOG('DOM 诊断', diag);
 
@@ -345,7 +427,7 @@
                 btn.classList.remove('busy');
                 showToast(
                     `❌ 提取失败：页面里没找到消息节点。<br/>` +
-                    `诊断：article=${diag.articles}，role节点=${diag.roleNodes}，` +
+                    `诊断：turn=${diag.turns || 0}，role节点=${diag.roleNodes}，` +
                     `markdown=${diag.markdownBlocks}，main=${diag.mainExists ? '有' : '无'}。<br/>` +
                     `请确认会话已加载完成，并按 F12 看 Console 的 <code>[PaperSync]</code> 日志。`,
                     false, 12000

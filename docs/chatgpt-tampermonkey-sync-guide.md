@@ -73,18 +73,17 @@ PaperSync 本地接收服务已启动: http://127.0.0.1:8765
 - **Q：如何开机自启本地接收服务？**
   - 可以把 `paper_sync\start-server.bat` 的快捷方式放入 Windows 开机启动文件夹（按 `Win + R` 输入 `shell:startup` 回车），即可随电脑启动在后台常驻。
 - **Q：脚本版本如何升级？**
-  - 打开 `paper_sync/chatgpt-paper-sync.user.js`，全选覆盖油猴里已有的旧脚本并保存即可。当前版本 `1.1.1`。
+  - 打开 `paper_sync/chatgpt-paper-sync.user.js`，全选覆盖油猴里已有的旧脚本并保存即可。当前版本 `1.2.0`。
 
 ---
 
-## 🛠️ 提取失败排查（v1.1.1）
+## 🛠️ 提取失败排查（v1.2.0）
 
-按钮点击后若提示 **「提取失败：页面里没找到消息节点」**，说明脚本的两种提取途径都没拿到内容。v1.1.1 的提取顺序是：
+按钮点击后若提示 **「提取失败：页面里没找到消息节点」**，说明脚本的提取途径都没拿到内容。v1.2.0 的提取机制升级为：
 
-1. **站内接口**（最优先）：先取 `/api/auth/session` 的 accessToken，再请求 `/backend-api/conversation/<id>`，拿到官方完整消息树（含公式、代码，质量最好）。
-2. **DOM 多级选择器**：`article[data-testid^="conversation-turn-"]` → `[data-message-author-role]` → `main article` → `main .markdown`。
-3. **按文案切分**：用「你说：/ ChatGPT 说:」这类标签切分正文，任何 UI 结构都能兜底。
-4. **等待重试**：首次为空会等待 1.2 秒再抓一次（应对懒渲染）。
+1. **站内接口长轮询（最优先）**：先取 `/api/auth/session` 的 accessToken，给足 45 秒超时与 GM 特权通道重试，请求 `/backend-api/conversation/<id>`，拿到官方完整消息树（含公式、代码、图表，质量最高）。
+2. **DOM 全标签选择器**：`[data-testid*="conversation-turn"]`（不限标签） → `[class*="conversation-turn"]` → `[data-message-author-role]` → `[data-message-id]` → `main .prose`。
+3. **整文智能兜底**：直接分析 `<main>` 区域，即使前端深度改版，也能把完整的论文精读长文直接解析提取。
 
 如果仍然失败，按下面顺序排查：
 
