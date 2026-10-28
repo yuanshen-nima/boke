@@ -105,13 +105,12 @@ def merge_meta(existing: dict, incoming: dict) -> tuple[dict, list[str]]:
     return meta, conflicts
 
 
-def _meta_table(meta: dict, is_public: bool = False) -> str:
+def _meta_table(meta: dict) -> str:
     rows = []
     if meta.get("chinese_title"):
         rows.append(("中文译名", meta["chinese_title"]))
     if meta.get("authors"):
-        author_suffix = "" if is_public else ("（来源：对话/笔记，未核实）" if meta.get("ai_extracted") else "")
-        rows.append(("作者", "、".join(meta["authors"]) + author_suffix))
+        rows.append(("作者", "、".join(meta["authors"]) + ("（来源：对话/笔记，未核实）" if meta.get("ai_extracted") else "")))
     if meta.get("institution"):
         rows.append(("研究机构", meta["institution"]))
     if meta.get("year"):
@@ -129,16 +128,14 @@ def _meta_table(meta: dict, is_public: bool = False) -> str:
     return "\n".join(f"| {k} | {v} |" for k, v in rows)
 
 
-def render_machine_block(meta: dict, discussions: list[dict], is_public: bool = False) -> str:
+def render_machine_block(meta: dict, discussions: list[dict]) -> str:
     parts = [MACHINE_BEGIN]
-    warning = ""
-    if meta.get("ai_extracted") and not is_public:
-        warning = "> ⚠️ 本条目由 AI 从对话中提取，所有公式与实验数字均未核实，引用前请对照原文。\n"
+    warning = "> ⚠️ 本条目由 AI 从对话中提取，所有公式与实验数字均未核实，引用前请对照原文。\n" if meta.get("ai_extracted") else ""
 
     # 优先：如果有完整的精读长文
     if meta.get("deep_dive"):
         deep_dive = meta["deep_dive"].strip()
-        tbl = _meta_table(meta, is_public=is_public)
+        tbl = _meta_table(meta)
         m_h1 = re.search(r"^(#\s+[^\n]+)", deep_dive)
         if m_h1:
             h1 = m_h1.group(1)
@@ -172,7 +169,7 @@ def render_machine_block(meta: dict, discussions: list[dict], is_public: bool = 
         parts += [f"# {meta.get('title') or '(未命名论文)'}", ""]
         if warning:
             parts.append(warning)
-        tbl = _meta_table(meta, is_public=is_public)
+        tbl = _meta_table(meta)
         if tbl:
             parts += ["| 字段 | 值 |", "| --- | --- |", tbl, ""]
         if meta.get("summary"):
@@ -201,24 +198,22 @@ def render_machine_block(meta: dict, discussions: list[dict], is_public: bool = 
             parts.append("## 论文局限")
             parts += [f"- {c}" for c in meta["limitations"]] + [""]
         if meta.get("my_notes"):
-            note_heading = "## 研究启发" if is_public else "## 我的研究启发（来自对话）"
-            parts.append(note_heading)
+            parts.append("## 我的研究启发（来自对话）")
             parts += [f"- {c}" for c in meta["my_notes"]] + [""]
 
-    if not is_public:
-        if discussions:
-            parts.append("## 讨论记录")
-            for d in discussions:
-                parts += [f"### {d.get('date', '')} · {d.get('conversation_key', '')}", d.get("summary", ""), ""]
-        if meta.get("missing_resources"):
-            parts.append("## 缺失资源")
-            parts += [f"- {m}" for m in meta["missing_resources"]] + [""]
+    if discussions:
+        parts.append("## 讨论记录")
+        for d in discussions:
+            parts += [f"### {d.get('date', '')} · {d.get('conversation_key', '')}", d.get("summary", ""), ""]
+    if meta.get("missing_resources"):
+        parts.append("## 缺失资源")
+        parts += [f"- {m}" for m in meta["missing_resources"]] + [""]
     parts.append(MACHINE_END)
     return "\n".join(parts)
 
 
 def render_draft_md(meta: dict, discussions: list[dict], human_block: str) -> str:
-    machine = render_machine_block(meta, discussions, is_public=False)
+    machine = render_machine_block(meta, discussions)
     human = human_block.strip() or "（待写：人工笔记写在 human 区内，同步不会覆盖。）"
     return (
         f"---\ntitle: {meta.get('title') or '(未命名论文)'}\n"
@@ -296,12 +291,9 @@ def render_public_md(meta: dict, discussions: list[dict], human_block: str, upda
             # YAML 值统一 JSON 转义，避免标题/摘要中的冒号破坏 frontmatter
             fm_lines.append(f"{k}: {json.dumps(str(v), ensure_ascii=False)}")
     fm_lines.append("---")
-    machine = render_machine_block(meta, discussions, is_public=True)
+    machine = render_machine_block(meta, discussions)
     # 公开版不需要 machine 标记
     machine = machine.replace(MACHINE_BEGIN + "\n", "").replace("\n" + MACHINE_END, "")
     human = human_block.strip()
-    if human and not human.startswith("（待写：人工笔记写在 human 区内"):
-        human_md = "\n\n## 我的研究笔记\n\n" + human
-    else:
-        human_md = ""
+    human_md = ("\n\n## 我的研究笔记\n\n" + human) if human else ""
     return "\n".join(fm_lines) + "\n\n" + machine + human_md + "\n"

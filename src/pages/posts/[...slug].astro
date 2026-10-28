@@ -45,11 +45,16 @@ const jsonLd = {
 		: siteConfig.lang.replace("_", "-"),
 	// TODO include cover image here
 };
+
+const isPrivateDaily = entry.slug.startsWith("daily-") || entry.data.category === "对话摘要";
 ---
 <MainGridLayout banner={entry.data.image} title={entry.data.title} description={entry.data.description} lang={entry.data.lang} setOGTypeArticle={true} headings={headings}>
     <script is:inline slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
+    {isPrivateDaily && <meta name="robots" content="noindex, nofollow" slot="head" />}
     <div class="flex w-full rounded-[var(--radius-large)] overflow-hidden relative mb-4">
-        <div id="post-container" class:list={["card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full ",
+        <div id="post-container"
+            data-pagefind-ignore={isPrivateDaily ? "all" : undefined}
+            class:list={["card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full ",
             {}
         ]}>
             <!-- word count and reading time -->
@@ -80,7 +85,7 @@ const jsonLd = {
             <!-- title -->
             <div class="relative onload-animation">
                 <div
-                    data-pagefind-body data-pagefind-weight="10" data-pagefind-meta="title"
+                    {...(!isPrivateDaily ? { "data-pagefind-body": true, "data-pagefind-weight": "10", "data-pagefind-meta": "title" } : {})}
                     class="transition w-full block font-bold mb-3
                     text-3xl md:text-[2.25rem]/[2.75rem]
                     text-black/90 dark:text-white/90
@@ -110,7 +115,7 @@ const jsonLd = {
             }
 
 
-            <Markdown class="mb-6 markdown-content onload-animation">
+            <Markdown class="mb-6 markdown-content onload-animation" pagefind={!isPrivateDaily}>
                 <Content />
             </Markdown>
 

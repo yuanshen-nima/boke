@@ -102,7 +102,9 @@ export default defineConfig({
 			}
 		}),
         svelte(),
-		sitemap(),
+		sitemap({
+			filter: (page) => !page.includes("/posts/daily-"),
+		}),
 	],
 	markdown: {
 		remarkPlugins: [

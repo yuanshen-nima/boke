@@ -17,7 +17,11 @@ function stripInvalidXmlChars(str: string): string {
 }
 
 export async function GET(context: APIContext) {
-	const blog = await getSortedPosts();
+	const allPosts = await getSortedPosts();
+	// 私密对话专区不外泄至公开 RSS 订阅流
+	const blog = allPosts.filter(
+		(post) => !post.slug.startsWith("daily-") && post.data.category !== "对话摘要",
+	);
 
 	return rss({
 		title: siteConfig.title,
