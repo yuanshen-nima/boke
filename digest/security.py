@@ -24,7 +24,7 @@ SCAN_PATTERNS = [
     (r"(?i)(api[_-]?key|apikey|secret|passwd|password|pwd|access[_-]?token)\s*[=:：]\s*[\"']?[^\s\"']{12,}", "凭据赋值", "secret"),
     (r"(?i)(postgresql|postgres|mysql|mongodb)(\+srv)?://[^\s\"']+", "数据库连接串", "secret"),
     (r"https?://[^\s/:@\"']+:[^@\s\"']+@", "URL 内嵌凭据", "secret"),
-    (r"(?<![A-Za-z0-9])[A-Za-z]:\\[^\s\"'）)】，。]{3,}", "Windows 绝对路径", "privacy"),
+    (r"(?<![A-Za-z0-9])[A-Za-z]:\\(?![|<>])[^\s\"'）)】，。]{3,}", "Windows 绝对路径", "privacy"),
     (r"(?<![A-Za-z0-9])/(?:home|Users|root)/[^\s\"'）)】，。]{3,}", "Unix 绝对路径", "privacy"),
     (r"(?<![A-Za-z0-9])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![A-Za-z0-9.])", "内网 IP", "privacy"),
     (r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "邮箱地址", "privacy"),
