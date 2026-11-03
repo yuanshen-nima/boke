@@ -1,6 +1,9 @@
 ---
 import type { GetStaticPaths } from "astro";
+import { getCollection } from "astro:content";
+import { Icon } from "astro-icon/components";
 import Pagination from "../components/control/Pagination.astro";
+import PapersBrowser from "../components/papers/PapersBrowser.svelte";
 import PinnedPosts from "../components/PinnedPosts.astro";
 import PostPage from "../components/PostPage.astro";
 import { PAGE_SIZE } from "../constants/constants";
@@ -14,18 +17,159 @@ export const getStaticPaths = (async ({ paginate }) => {
 	);
 	return paginate(allBlogPosts, { pageSize: PAGE_SIZE });
 }) satisfies GetStaticPaths;
-// https://github.com/withastro/astro/issues/6507#issuecomment-1489916992
 
 const { page } = Astro.props;
 
 const len = page.data.length;
 const pinnedPosts = page.currentPage === 1 ? await getPinnedPosts() : [];
+
+// 获取全部公开的论文精读
+const rawPapers = await getCollection("papers", ({ data }) => data.draft !== true);
+const papers = rawPapers
+	.map((p) => ({
+		slug: p.id,
+		title: p.data.title,
+		description: p.data.description,
+		year: p.data.year,
+		venue: p.data.venue,
+		doi: p.data.doi,
+		arxiv: p.data.arxiv,
+		paperUrl: p.data.paperUrl,
+		githubUrl: p.data.githubUrl,
+		topics: p.data.topics,
+		tags: p.data.tags,
+		updated: p.data.updated,
+	}))
+	.sort(
+		(a, b) =>
+			(b.year ?? 0) - (a.year ?? 0) || (b.updated ?? "").localeCompare(a.updated ?? ""),
+	);
+
+const allPostsCount = (await getSortedPosts()).length;
+const isPageOne = page.currentPage === 1;
 ---
 
-<MainGridLayout>
-    {pinnedPosts.length > 0 && (
-        <PinnedPosts posts={pinnedPosts} class="mb-4" style={`animation-delay: calc(var(--content-delay))`}></PinnedPosts>
-    )}
-    <PostPage page={page}></PostPage>
-    <Pagination class="mx-auto onload-animation" page={page} style={`animation-delay: calc(var(--content-delay) + ${(len)*50}ms)`}></Pagination>
+<MainGridLayout title="论文知识库" description="多目标跟踪（MOT）与具身智能论文精读，以及日常研究思考">
+    <!-- 主页顶部模式切换器：论文知识库（主页默认） / 日常笔记与动态 -->
+    <div class="card-base p-1.5 mb-4 flex gap-1.5 items-center rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 onload-animation">
+        <button
+            type="button"
+            id="home-tab-papers"
+            class:list={[
+                "home-tab-btn flex-1 py-2.5 px-4 rounded-lg font-bold text-sm md:text-base flex items-center justify-center gap-2 transition cursor-pointer",
+                isPageOne
+                    ? "bg-[var(--card-bg)] text-[var(--primary)] shadow-sm active"
+                    : "text-black/60 dark:text-white/60 hover:text-black/90 dark:hover:text-white/90"
+            ]}
+        >
+            <Icon name="material-symbols:library-books-outline-rounded" class="text-xl" />
+            <span>论文知识库</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] font-semibold">{papers.length}</span>
+        </button>
+        <button
+            type="button"
+            id="home-tab-posts"
+            class:list={[
+                "home-tab-btn flex-1 py-2.5 px-4 rounded-lg font-medium text-sm md:text-base flex items-center justify-center gap-2 transition cursor-pointer",
+                !isPageOne
+                    ? "bg-[var(--card-bg)] text-[var(--primary)] shadow-sm active"
+                    : "text-black/60 dark:text-white/60 hover:text-black/90 dark:hover:text-white/90"
+            ]}
+        >
+            <Icon name="material-symbols:notes-rounded" class="text-xl" />
+            <span>日常笔记与动态</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60 font-medium">{allPostsCount}</span>
+        </button>
+    </div>
+
+    <!-- 论文知识库面板（主页默认展示） -->
+    <div id="home-pane-papers" class:list={["transition-all duration-300", { hidden: !isPageOne }]}>
+        <div class="card-base py-6 px-4 md:px-8 mb-4 onload-animation w-full">
+            <div class="flex items-center justify-between mb-1">
+                <div class="transition font-bold text-2xl md:text-[2rem]/[2.5rem]
+                            text-black/90 dark:text-white/90
+                            md:before:w-1 before:h-5 before:rounded-md before:bg-[var(--primary)]
+                            before:absolute before:top-[0.625rem] before:left-[-1.125rem] relative">
+                    论文知识库
+                </div>
+                <span class="text-xs text-black/40 dark:text-white/40 hidden sm:inline">
+                    共收录 {papers.length} 篇精读报告
+                </span>
+            </div>
+            <p class="text-xs md:text-sm text-black/40 dark:text-white/40 mb-5">
+                精读笔记由 AI 对话整理生成，公式与实验数字均标注核验状态，支持全文筛选与检索。
+            </p>
+            <PapersBrowser client:load papers={papers}></PapersBrowser>
+        </div>
+    </div>
+
+    <!-- 文章与日志面板 -->
+    <div id="home-pane-posts" class:list={["transition-all duration-300", { hidden: isPageOne }]}>
+        {pinnedPosts.length > 0 && (
+            <PinnedPosts posts={pinnedPosts} class="mb-4" style={`animation-delay: calc(var(--content-delay))`}></PinnedPosts>
+        )}
+        <PostPage page={page}></PostPage>
+        <Pagination class="mx-auto onload-animation" page={page} style={`animation-delay: calc(var(--content-delay) + ${(len)*50}ms)`}></Pagination>
+    </div>
 </MainGridLayout>
+
+<script is:inline define:vars={{ isPageOne }}>
+    function initHomeTabs() {
+        const tabPapers = document.getElementById("home-tab-papers");
+        const tabPosts = document.getElementById("home-tab-posts");
+        const panePapers = document.getElementById("home-pane-papers");
+        const panePosts = document.getElementById("home-pane-posts");
+
+        if (!tabPapers || !tabPosts || !panePapers || !panePosts) return;
+
+        function setTab(tab) {
+            if (tab === "posts") {
+                tabPapers.classList.remove("bg-[var(--card-bg)]", "text-[var(--primary)]", "shadow-sm", "active", "font-bold");
+                tabPapers.classList.add("text-black/60", "dark:text-white/60", "font-medium");
+
+                tabPosts.classList.remove("text-black/60", "dark:text-white/60", "font-medium");
+                tabPosts.classList.add("bg-[var(--card-bg)]", "text-[var(--primary)]", "shadow-sm", "active", "font-bold");
+
+                panePapers.classList.add("hidden");
+                panePosts.classList.remove("hidden");
+            } else {
+                tabPosts.classList.remove("bg-[var(--card-bg)]", "text-[var(--primary)]", "shadow-sm", "active", "font-bold");
+                tabPosts.classList.add("text-black/60", "dark:text-white/60", "font-medium");
+
+                tabPapers.classList.remove("text-black/60", "dark:text-white/60", "font-medium");
+                tabPapers.classList.add("bg-[var(--card-bg)]", "text-[var(--primary)]", "shadow-sm", "active", "font-bold");
+
+                panePosts.classList.add("hidden");
+                panePapers.classList.remove("hidden");
+            }
+        }
+
+        tabPapers.onclick = () => {
+            if (!isPageOne) {
+                window.location.href = "/";
+                return;
+            }
+            setTab("papers");
+            if (history.replaceState) history.replaceState(null, "", window.location.pathname);
+        };
+
+        tabPosts.onclick = () => {
+            setTab("posts");
+            if (history.replaceState) history.replaceState(null, "", "#posts");
+        };
+
+        // 判定初始激活态：
+        // 如果不在第 1 页，或者 URL hash 为 #posts，激活文章列表；否则在第 1 页默认显示论文知识库
+        if (!isPageOne || window.location.hash === "#posts") {
+            setTab("posts");
+        } else {
+            setTab("papers");
+        }
+    }
+
+    initHomeTabs();
+    document.addEventListener("DOMContentLoaded", initHomeTabs);
+    if (window.swup && window.swup.hooks) {
+        window.swup.hooks.on("page:view", initHomeTabs);
+    }
+</script>
