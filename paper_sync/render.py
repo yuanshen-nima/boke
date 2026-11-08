@@ -269,6 +269,8 @@ def render_public_md(meta: dict, discussions: list[dict], human_block: str, upda
     }
     if meta.get("year"):
         fm["year"] = meta["year"]
+    if meta.get("venue"):
+        fm["venue"] = meta["venue"]
     if meta.get("doi"):
         fm["doi"] = meta["doi"]
     if meta.get("arxiv"):

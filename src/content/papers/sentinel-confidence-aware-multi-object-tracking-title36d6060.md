@@ -5,8 +5,9 @@ paperId: "title:36d6060025d43d40"
 topics: ["论文精读"]
 tags: ["论文", "Scientific Reports"]
 draft: false
-updated: "2026-11-03"
+updated: "2026-11-08"
 year: 2026
+venue: "Scientific Reports"
 ---
 
 # 总体深度解读

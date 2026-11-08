@@ -5,8 +5,9 @@ paperId: "doi:10.1109/tgrs.2026.3656586"
 topics: ["论文精读"]
 tags: ["论文", "IEEE Transactions on Geoscience and Remote Sensing (IEEE TGRS)"]
 draft: false
-updated: "2026-11-03"
+updated: "2026-11-08"
 year: 2026
+venue: "IEEE Transactions on Geoscience and Remote Sensing (IEEE TGRS)"
 doi: "10.1109/TGRS.2026.3656586"
 paperUrl: "https://doi.org/10.1109/TGRS.2026.3656586"
 ---

@@ -5,8 +5,9 @@ paperId: "arxiv:2511.13105"
 topics: ["论文精读"]
 tags: ["论文", "AAAI"]
 draft: false
-updated: "2026-11-03"
+updated: "2026-11-08"
 year: 2026
+venue: "AAAI"
 ---
 
 # 总体深度解读

@@ -5,8 +5,9 @@ paperId: "arxiv:2503.12562"
 topics: ["论文精读"]
 tags: ["论文", "ECCV 2026"]
 draft: false
-updated: "2026-10-27"
+updated: "2026-11-08"
 year: 2026
+venue: "ECCV 2026"
 arxiv: "2503.12562v2"
 githubUrl: "https://github.com/MCG-NJU/HATReID-MOT"
 ---

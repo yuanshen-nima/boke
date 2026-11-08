@@ -5,8 +5,9 @@ paperId: "title:5b3799d0ea3bfe04"
 topics: ["论文精读"]
 tags: ["论文", "CVPR 2026"]
 draft: false
-updated: "2026-10-28"
+updated: "2026-11-08"
 year: 2026
+venue: "CVPR 2026"
 githubUrl: "https://github.com/SkyeSong38/HyperMOT"
 ---
 

@@ -5,8 +5,9 @@ paperId: "doi:10.1007/978-3-031-20047-2_1"
 topics: ["论文精读"]
 tags: ["论文", "ECCV"]
 draft: false
-updated: "2026-10-25"
+updated: "2026-11-08"
 year: 2022
+venue: "ECCV"
 doi: "10.1007/978-3-031-20047-2_1"
 arxiv: "2110.06864"
 paperUrl: "https://arxiv.org/abs/2110.06864"
@@ -17,7 +18,7 @@ githubUrl: "https://github.com/ifzhang/ByteTrack"
 
 | 字段 | 值 |
 | --- | --- |
-| 作者 | Yifu Zhang、Peize Sun、Yi Jiang、Dongdong Yu、Fucheng Weng、Zehuan Yuan、Ping Luo、Wenyu Liu、Xinggang Wang（来源：对话/笔记，未核实） |
+| 作者 | Yifu Zhang、Peize Sun、Yi Jiang、Dongdong Yu、Fucheng Weng、Zehuan Yuan、Ping Luo、Wenyu Liu、Xinggang Wang |
 | 年份 | 2022 |
 | 发表场所 | ECCV |
 | DOI | 10.1007/978-3-031-20047-2_1 |
